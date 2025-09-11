@@ -1,0 +1,145 @@
+{
+  "expo": {
+    "name": "TrueAds POS",
+    "slug": "postrueads",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/logo.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "scheme": "trueadspos",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "pos.trueads.ai",
+      "icon": "./assets/logo.png",
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "TrueAds sử dụng camera để quét mã vạch nhằm xác định sản phẩm (ví dụ: lấy mã SKU để hiển thị thông tin sản phẩm).",
+        "NSPhotoLibraryUsageDescription": "TrueAds truy cập thư viện ảnh để bạn có thể quét mã vạch nhằm xác định sản phẩm (ví dụ: lấy mã SKU để hiển thị thông tin sản phẩm).",
+        "NSLocalNetworkUsageDescription": "TrueAds cần truy cập mạng cục bộ để tìm và kết nối tới máy in trong cùng mạng LAN (ví dụ Xprinter T80W).",
+        "NSBonjourServices": ["_ipp._tcp", "_printer._tcp", "_pdl-datastream._tcp"],
+        "NSBluetoothAlwaysUsageDescription": "TrueAds sử dụng Bluetooth để kết nối tới máy in (nếu máy in hỗ trợ Bluetooth).",
+        "NSBluetoothPeripheralUsageDescription": "TrueAds cần sử dụng Bluetooth để tìm kiếm và kết nối với máy in hỗ trợ Bluetooth gần đây.",
+        "NSUserTrackingUsageDescription": "TrueAds sử dụng thông tin này để cải thiện trải nghiệm người dùng và cung cấp quảng cáo phù hợp hơn.",
+        "UIBackgroundModes": ["remote-notification"],
+        "GIDClientID": "787039452042-3bqo523hgcr4u4vfs3r1mi1a9qqqf691.apps.googleusercontent.com",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "pos.trueads.ai",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.INTERNET",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "googleServicesFile": "./google-services.json"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-asset",
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": false,
+          "supportsPictureInPicture": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TrueAds truy cập thư viện ảnh để bạn có thể quét mã vạch nhằm xác định sản phẩm (ví dụ: lấy mã SKU để hiển thị thông tin sản phẩm).",
+          "cameraPermission": "TrueAds sử dụng camera để quét mã vạch nhằm xác định sản phẩm (ví dụ: lấy mã SKU để hiển thị thông tin sản phẩm)."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "TrueAds truy cập thư viện ảnh để bạn có thể quét mã vạch nhằm xác định sản phẩm (ví dụ: lấy mã SKU để hiển thị thông tin sản phẩm).",
+          "savePhotosPermission": "Cho phép TrueAds lưu trữ ảnh, ví dụ như ảnh chia sẻ sản phẩm mà bạn nhận được.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/logo.png",
+          "color": "#ffffff"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#ffffff",
+          "image": "./assets/logo.png"
+        }
+      ],
+      "react-native-edge-to-edge",
+      [
+        "react-native-fbsdk-next",
+        {
+          "appID": "1485414598832738",
+          "clientToken": "6652f0bc83362a3175ec3a09c09e79e2",
+          "displayName": "TrueAds",
+          "advertiserIDCollectionEnabled": false,
+          "autoLogAppEventsEnabled": false,
+          "isAutoInitEnabled": true,
+          "iosUserTrackingPermission": "TrueAds sử dụng thông tin này để cải thiện trải nghiệm người dùng và cung cấp quảng cáo phù hợp hơn."
+        }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.787039452042-3bqo523hgcr4u4vfs3r1mi1a9qqqf691"
+        }
+      ],
+      ["expo-apple-authentication"],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "TrueAds truy cập camera để bạn quét mã QR hoặc Barcode, ví dụ thêm sản phẩm vào đơn hàng hoặc thêm sản phẩm vào danh sách mua sắm."
+        }
+      ],
+      "expo-web-browser",
+      "expo-iap",
+      "expo-audio",
+      "expo-tracking-transparency"
+    ],
+    "fonts": [
+      {
+        "asset": "assets/fonts/Inter-Regular.ttf"
+      },
+      {
+        "asset": "assets/fonts/Inter-Medium.ttf"
+      },
+      {
+        "asset": "assets/fonts/Inter-Bold.ttf"
+      },
+      {
+        "asset": "assets/fonts/Inter-Black.ttf"
+      }
+    ]
+  }
+}

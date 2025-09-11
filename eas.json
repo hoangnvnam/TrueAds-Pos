@@ -1,0 +1,63 @@
+{
+  "cli": {
+    "version": ">= 16.3.3",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug"
+      },
+      "channel": "development"
+    },
+    "development-apk": {
+      "android": {
+        "buildType": "apk"
+      },
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "development-apk"
+    },
+    "preview-apk": {
+      "android": {
+        "buildType": "apk"
+      },
+      "distribution": "internal",
+      "developmentClient": false,
+      "channel": "preview-apk"
+    },
+    "release-apk": {
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
+      },
+      "distribution": "internal",
+      "developmentClient": false,
+      "autoIncrement": false,
+      "env": {
+        "APP_ENV": "production"
+      },
+      "channel": "release-apk"
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview"
+    },
+    "production": {
+      "autoIncrement": true,
+      "channel": "production"
+    },
+    "release": {
+      "ios": {
+        "image": "latest"
+      },
+      "channel": "release"
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
