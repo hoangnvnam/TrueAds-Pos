@@ -22,7 +22,6 @@ import { Navigation } from './navigation';
 import { store } from './store';
 import { NetworkStatusBar } from './components/NetworkStatusBar';
 import { AsignedProvider } from './contexts/AsignedContext';
-import { UpdateChecker } from './components/UpdateChecker';
 import { UpdateProvider } from './contexts/UpdateContext';
 import { SocketProvider } from './contexts/SocketContext';
 
