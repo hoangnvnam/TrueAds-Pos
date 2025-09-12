@@ -9,7 +9,6 @@ import { Loading } from './components/Loading';
 import { SplashAnimation } from './components/SplashAnimation';
 import { queryClient } from './configs/react-query';
 import { AuthProvider } from './contexts/AuthContext';
-import { ImageUploadProvider } from './contexts/ImageUploadContext';
 import { InitDataProvider } from './contexts/InitData';
 import { LoadingProvider } from './contexts/LoadingContext';
 import { NetworkProvider } from './contexts/NetworkContext';
@@ -21,7 +20,6 @@ import { Navigation } from './navigation';
 // import { configurePushNotifications } from './services/NotificationService';
 import { store } from './store';
 import { NetworkStatusBar } from './components/NetworkStatusBar';
-import { AsignedProvider } from './contexts/AsignedContext';
 import { UpdateProvider } from './contexts/UpdateContext';
 import { SocketProvider } from './contexts/SocketContext';
 
@@ -44,11 +42,9 @@ function AppContent() {
         <AuthProvider>
           <NotificationProvider>
             <InitDataProvider>
-              <AsignedProvider>
-                <ImageUploadProvider>
-                  <SidebarProvider>
-                    <UpdateProvider>
-                      {/* {isReady ? (
+              <SidebarProvider>
+                <UpdateProvider>
+                  {/* {isReady ? (
                         <>
                           <Navigation
                             linking={{
@@ -58,12 +54,10 @@ function AppContent() {
                           />
                         </>
                       ) : ( */}
-                      <SplashAnimation setIsReady={setIsReady} />
-                      {/* )} */}
-                    </UpdateProvider>
-                  </SidebarProvider>
-                </ImageUploadProvider>
-              </AsignedProvider>
+                  <SplashAnimation setIsReady={setIsReady} />
+                  {/* )} */}
+                </UpdateProvider>
+              </SidebarProvider>
             </InitDataProvider>
           </NotificationProvider>
         </AuthProvider>
