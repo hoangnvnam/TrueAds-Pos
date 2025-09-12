@@ -4,7 +4,7 @@
     "slug": "postrueads",
     "version": "1.0.0",
     "orientation": "default",
-    "icon": "./assets/logo.png",
+    "icon": "./assets/pos.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "scheme": "trueadspos",
@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "pos.trueads.ai",
-      "icon": "./assets/logo.png",
+      "icon": "./assets/pos.png",
       "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "TrueAds sử dụng camera để quét mã vạch nhằm xác định sản phẩm (ví dụ: lấy mã SKU để hiển thị thông tin sản phẩm).",
@@ -47,7 +47,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/logo.png",
+        "foregroundImage": "./assets/pos.png",
         "backgroundColor": "#ffffff"
       },
       "package": "pos.trueads.ai",
