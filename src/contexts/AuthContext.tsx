@@ -9,7 +9,6 @@ import { axiosParent } from '~/configs/axios';
 import { useLoading } from '~/contexts/LoadingContext';
 import { useStorage } from '~/hooks/useStorage';
 import { toastError } from '~/hooks/useToast';
-import { useSocketContext } from './SocketContext';
 
 interface AuthContextType {
   authInfo: any;
@@ -49,7 +48,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
   const { showLoading, hideLoading } = useLoading();
   const queryClient = useQueryClient();
-  const { socket } = useSocketContext();
 
   useLayoutEffect(() => {
     checkAuthState();
@@ -129,13 +127,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       showLoading();
-
-      const pageConnected = queryClient.getQueryData(['pagesConnected']) as any;
-      if (pageConnected) {
-        pageConnected?.data?.forEach((d: any) => {
-          socket?.emit('leaveRoomChat', { id: d.id });
-        });
-      }
       try {
         await axiosParent.post('/logout', {
           expoToken: await AsyncStorage.getItem('expoPushToken'),

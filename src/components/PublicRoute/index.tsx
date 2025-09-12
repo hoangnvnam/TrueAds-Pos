@@ -17,9 +17,8 @@ export function PublicRoute({ children }: PublicRouteProps) {
     if (authInfo) {
       if (authChild) {
         if (isLoginScreen) {
-          navigation.replace('ServiceSelection');
+          navigation.replace('HomeTabs');
         }
-        // navigation.replace('HomeTabs');
       } else {
         navigation.replace('AccessToStore');
       }

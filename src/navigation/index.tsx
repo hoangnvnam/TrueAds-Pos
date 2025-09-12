@@ -3,10 +3,6 @@ import { createStaticNavigation, StaticParamList, useFocusEffect } from '@react-
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
 import { Image } from 'react-native';
-import orderIcon from '~/assets/icons/cart.png';
-import chartIcon from '~/assets/icons/chart.png';
-import converIcon from '~/assets/icons/conver.png';
-import settingsIcon from '~/assets/icons/menu.png';
 import { NotificationHandler } from '~/components/NotificationHandler';
 import { useSidebar } from '~/contexts/SidebarContext';
 import { useTheme } from '~/hooks/useTheme';
@@ -14,31 +10,39 @@ import { Layout } from '../components/Layout';
 import { PrivateRoute } from '../components/PrivateRoute';
 import { PublicRoute } from '../components/PublicRoute';
 import { privateRoutes, routes } from '../configs/routes';
+import salesIcon from '~/assets/icons/cart.png';
+import reportsIcon from '~/assets/icons/chart.png';
+import settingsIcon from '~/assets/icons/menu.png';
+import inventoryIcon from '~/assets/icons/order.png';
+import { Cashier } from '~/screens/Cashier';
+import { POSInventory } from '~/screens/Inventory';
+import { POSReports } from '~/screens/Reports';
+import { POSSettings } from '~/screens/Settings';
 
 const tabs = [
   {
     name: 'Home',
-    title: 'Hội thoại',
-    icon: converIcon,
+    title: 'Bán hàng',
+    icon: salesIcon,
     routeName: 'HomeTabs',
   },
   {
-    name: 'Order',
-    title: 'Đơn hàng',
-    icon: orderIcon,
-    routeName: 'Order',
+    name: 'POSInventory',
+    title: 'Kho hàng',
+    icon: inventoryIcon,
+    routeName: 'POSInventory',
   },
   {
-    name: 'Report',
-    title: 'Thống kê',
-    icon: chartIcon,
-    routeName: 'Report',
+    name: 'POSReports',
+    title: 'Báo cáo',
+    icon: reportsIcon,
+    routeName: 'POSReports',
   },
   {
-    name: 'Settings',
+    name: 'POSSettings',
     title: 'Cài đặt',
     icon: settingsIcon,
-    routeName: 'Settings',
+    routeName: 'POSSettings',
   },
 ];
 // Component wrapper cho mỗi tab
@@ -151,39 +155,13 @@ declare global {
   namespace ReactNavigation {
     interface RootParamList extends StaticParamList<typeof RootStack> {
       Login: undefined;
-      HomeTabs: undefined;
       AccessToStore: undefined;
-      Report: undefined;
-      Profile: undefined;
       Settings: undefined;
-      NotFound: undefined;
       Devices: undefined;
       BarcodeScanner: undefined;
       Packages: undefined;
       Purchase: { param?: any };
-      OrderDetail: { order: any };
-      Search: undefined;
-      Messages: { param: { conversationid: string; pageid: string; [key: string]: any }; showCart?: boolean };
-      MessageOrder: {
-        detailCustomer: any;
-        param: { conversationid: string; pageid: string; come_from: string; [key: string]: any };
-        avatar: string;
-        name: string;
-      };
-      MessageCreateOrder: {
-        detailCustomer: any;
-        param: { conversationid: string; pageid: string; come_from: string; [key: string]: any };
-        avatar: string;
-        name: string;
-      };
-      MessageStaff: {
-        detailCustomer: any;
-        param: { conversationid: string; pageid: string; come_from: string; [key: string]: any };
-        avatar: string;
-        name: string;
-      };
-      ServiceSelection: undefined;
-      POSTabs: undefined;
+      HomeTabs: undefined;
       Print: undefined;
     }
   }

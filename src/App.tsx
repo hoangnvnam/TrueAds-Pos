@@ -44,18 +44,18 @@ function AppContent() {
             <InitDataProvider>
               <SidebarProvider>
                 <UpdateProvider>
-                  {/* {isReady ? (
-                        <>
-                          <Navigation
-                            linking={{
-                              enabled: 'auto',
-                              prefixes: ['trueadspos://'],
-                            }}
-                          />
-                        </>
-                      ) : ( */}
-                  <SplashAnimation setIsReady={setIsReady} />
-                  {/* )} */}
+                  {isReady ? (
+                    <>
+                      <Navigation
+                        linking={{
+                          enabled: 'auto',
+                          prefixes: ['trueadspos://'],
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <SplashAnimation setIsReady={setIsReady} />
+                  )}
                 </UpdateProvider>
               </SidebarProvider>
             </InitDataProvider>

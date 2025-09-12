@@ -1,28 +1,19 @@
-import { LayoutMessages } from '~/components/Layout/LayoutMessages';
 import { LayoutModal } from '~/components/Layout/LayoutModal';
 import { AccessToStore } from '~/screens/AccessToStore';
 import { BarcodeScanner } from '~/screens/BarcodeScanner';
 import { Devices } from '~/screens/Devices';
-import { Home } from '~/screens/Home';
 import { Login } from '~/screens/Login';
-import Messages from '~/screens/Messages';
 import { NotFound } from '~/screens/NotFound';
-import { Order } from '~/screens/Order';
-import { OrderDetail } from '~/screens/OrderDetail';
+import { Packages } from '~/screens/Packages/Packages';
+import PrinterConnect from '~/screens/Print';
 import { Profile } from '~/screens/Profile';
-import { Report } from '~/screens/Report';
-import Search from '~/screens/Search';
-import { Settings } from '~/screens/Settings';
+import { Purchase } from '~/screens/Purchase';
 import { GradientBackground } from '../components/GradientBackground';
 import { LayoutSidebar } from '../components/Layout/LayoutWithSideBar';
-import MessageOrder from '~/screens/MessageOrder';
-import MessageCreateOrder from '~/screens/MessageCreateOrder';
-import MessageStaff from '~/screens/MessageStaff';
-import { Purchase } from '~/screens/Purchase';
-import { Packages } from '~/screens/Packages/Packages';
-import { ServiceSelection } from '~/screens/ServiceSelection';
-import { POSNavigator } from '~/navigation/POSNavigator';
-import PrinterConnect from '~/screens/POS/Print';
+import { Cashier } from '~/screens/Cashier';
+import { POSInventory } from '~/screens/Inventory';
+import { POSReports } from '~/screens/Reports';
+import { POSSettings } from '~/screens/Settings';
 
 export interface RouteConfig {
   name: string;
@@ -62,15 +53,6 @@ export const publicRoutes: RouteConfig[] = [
 
 export const privateRoutes: RouteConfig[] = [
   {
-    name: 'HomeTabs',
-    component: Home,
-    layout: LayoutSidebar,
-    options: {
-      headerShown: false,
-    },
-    isPrivate: true,
-  },
-  {
     name: 'AccessToStore',
     component: AccessToStore,
     layout: LayoutSidebar,
@@ -80,18 +62,35 @@ export const privateRoutes: RouteConfig[] = [
     isPrivate: true,
   },
   {
-    name: 'ServiceSelection',
-    component: ServiceSelection,
+    name: 'HomeTabs',
+    component: Cashier,
     layout: LayoutSidebar,
     options: {
       headerShown: false,
     },
     isPrivate: true,
-    back: true,
   },
   {
-    name: 'POSTabs',
-    component: POSNavigator,
+    name: 'POSInventory',
+    component: POSInventory,
+    layout: LayoutSidebar,
+    options: {
+      headerShown: false,
+    },
+    isPrivate: true,
+  },
+  {
+    name: 'POSReports',
+    component: POSReports,
+    layout: LayoutSidebar,
+    options: {
+      headerShown: false,
+    },
+    isPrivate: true,
+  },
+  {
+    name: 'POSSettings',
+    component: POSSettings,
     layout: LayoutSidebar,
     options: {
       headerShown: false,
@@ -101,14 +100,13 @@ export const privateRoutes: RouteConfig[] = [
   {
     name: 'Packages',
     component: Packages,
-    layout: LayoutModal,
+    layout: GradientBackground,
     options: {
       headerShown: false,
     },
     back: true,
     isPrivate: true,
   },
-
   {
     name: 'Purchase',
     component: Purchase,
@@ -118,53 +116,6 @@ export const privateRoutes: RouteConfig[] = [
       presentation: 'modal',
     },
     back: true,
-    isPrivate: true,
-  },
-  {
-    name: 'Messages',
-    component: Messages,
-    layout: LayoutMessages,
-    options: {
-      headerShown: false,
-    },
-    isPrivate: true,
-  },
-  {
-    name: 'Report',
-    component: Report,
-    layout: LayoutSidebar,
-    options: {
-      headerShown: false,
-    },
-    isPrivate: true,
-  },
-  {
-    name: 'Order',
-    component: Order,
-    layout: LayoutSidebar,
-    options: {
-      headerShown: false,
-    },
-    isPrivate: true,
-  },
-  {
-    name: 'Search',
-    component: Search,
-    layout: GradientBackground,
-    options: {
-      headerShown: false,
-      presentation: 'modal',
-    },
-    back: true,
-    isPrivate: true,
-  },
-  {
-    name: 'Settings',
-    component: Settings,
-    layout: LayoutSidebar,
-    options: {
-      headerShown: false,
-    },
     isPrivate: true,
   },
   {
@@ -198,50 +149,6 @@ export const privateRoutes: RouteConfig[] = [
     },
     back: true,
     isPrivate: true,
-  },
-  {
-    name: 'OrderDetail',
-    component: OrderDetail,
-    layout: LayoutModal,
-    options: {
-      headerShown: false,
-      presentation: 'modal',
-    },
-    isPrivate: true,
-    back: true,
-  },
-  {
-    name: 'MessageOrder',
-    component: MessageOrder,
-    layout: LayoutModal,
-    options: {
-      headerShown: false,
-      presentation: 'modal',
-    },
-    isPrivate: true,
-    back: true,
-  },
-  {
-    name: 'MessageCreateOrder',
-    component: MessageCreateOrder,
-    layout: LayoutModal,
-    options: {
-      headerShown: false,
-      presentation: 'modal',
-    },
-    isPrivate: true,
-    back: true,
-  },
-  {
-    name: 'MessageStaff',
-    component: MessageStaff,
-    layout: LayoutModal,
-    options: {
-      headerShown: false,
-      presentation: 'modal',
-    },
-    isPrivate: true,
-    back: true,
   },
   {
     name: 'NotFound',
