@@ -45,12 +45,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       Notifications.getLastNotificationResponseAsync().then((response) => {
         if (response) {
-          if (
-            response.notification.request.content.data.action !== 'goto_messages' &&
-            response.notification.request.content.data?.conversationid
-          ) {
-            setGotoMessages(response.notification.request.content.data);
-          }
+          // if (
+          //   response.notification.request.content.data.action !== 'goto_messages' &&
+          //   response.notification.request.content.data?.conversationid
+          // ) {
+          //   setGotoMessages(response.notification.request.content.data);
+          // }
         }
       });
     }
@@ -69,12 +69,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {});
 
       responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
-        if (response.notification.request.content.data.action === 'goto_messages') {
-          setGotoMessages(response.notification.request.content.data.data);
-          setReloadConversation(true);
-        } else if (response.notification.request.content.data?.conversationid) {
-          setGotoMessages(response.notification.request.content.data);
-        }
+        // if (response.notification.request.content.data.action === 'goto_messages') {
+        //   setGotoMessages(response.notification.request.content.data.data);
+        //   setReloadConversation(true);
+        // } else if (response.notification.request.content.data?.conversationid) {
+        //   setGotoMessages(response.notification.request.content.data);
+        // }
       });
     } else {
       setExpoPushToken(undefined);

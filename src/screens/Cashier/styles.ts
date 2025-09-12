@@ -1,4 +1,6 @@
+import { DIMENSIONS } from '~/constants/dimensions';
 import { useComponentStyles } from '~/hooks/useComponentStyles';
+import { globalStyles } from '~/styles/globalStyles';
 
 export function useCashierStyles() {
   return useComponentStyles((theme) => ({
@@ -10,6 +12,7 @@ export function useCashierStyles() {
       flexDirection: 'row',
     },
     leftPanel: {
+      height: DIMENSIONS.SCREEN_HEIGHT,
       flex: 2,
       padding: 16,
       borderRadius: 12,
@@ -84,9 +87,13 @@ export function useCashierStyles() {
       paddingHorizontal: 16,
       marginBottom: 16,
       fontSize: 16,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.background,
     },
     categoryContainer: {
-      marginBottom: 16,
+      paddingTop: 4,
+      paddingBottom: 16,
+      paddingHorizontal: 16,
     },
     categoryButton: {
       paddingHorizontal: 18,
@@ -94,11 +101,10 @@ export function useCashierStyles() {
       borderRadius: 24,
       borderWidth: 0,
       marginRight: 10,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 2,
-      elevation: 2,
+      ...globalStyles.dropShadow,
+      justifyContent: 'center',
+      alignItems: 'center',
+      height: 40,
     },
     categoryText: {
       fontSize: 16,
@@ -143,12 +149,7 @@ export function useCashierStyles() {
       padding: 14,
       marginBottom: 10,
       borderRadius: 12,
-      borderWidth: 0,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 3,
-      elevation: 2,
+      borderBottomWidth: 1,
     },
     cartItemInfo: {
       flex: 1,
@@ -222,6 +223,328 @@ export function useCashierStyles() {
     checkoutButtonText: {
       color: '#fff',
       fontSize: 18,
+      fontWeight: 'bold',
+    },
+
+    // Price Display Styles
+    priceContainer: {
+      marginBottom: 8,
+    },
+    originalPriceStrikethrough: {
+      color: theme.colors.text,
+      textDecorationLine: 'line-through',
+      fontSize: 12,
+    },
+    priceRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    discountedPrice: {
+      color: theme.colors.primary,
+      fontWeight: 'bold',
+    },
+    discountBadge: {
+      backgroundColor: theme.colors.primary,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 4,
+    },
+    discountBadgeText: {
+      color: '#fff',
+      fontSize: 10,
+      fontWeight: 'bold',
+    },
+    manualDiscountBadge: {
+      backgroundColor: '#6c757d',
+      paddingHorizontal: 4,
+      paddingVertical: 1,
+      borderRadius: 3,
+    },
+    manualDiscountBadgeText: {
+      color: '#fff',
+      fontSize: 8,
+      fontWeight: 'bold',
+    },
+
+    // Discount Actions Styles
+    discountActionsContainer: {
+      flexDirection: 'row',
+      gap: 8,
+      marginBottom: 8,
+    },
+    removeDiscountButton: {
+      backgroundColor: theme.colors.error || '#ff4444',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+    },
+    addDiscountButton: {
+      backgroundColor: theme.colors.secondary || theme.colors.primary,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+    },
+    discountButtonText: {
+      color: '#fff',
+      fontSize: 12,
+    },
+
+    // Enhanced Quantity Input Styles
+    quantityInput: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      marginHorizontal: 14,
+      minWidth: 40,
+      textAlign: 'center',
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 6,
+      paddingHorizontal: 8,
+      backgroundColor: theme.colors.background,
+      color: theme.colors.text,
+    },
+
+    // Product Section Styles
+    productSectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    productCount: {
+      color: theme.colors.text,
+    },
+
+    // Cart Header Styles
+    cartHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    cartItemsBadge: {
+      backgroundColor: theme.colors.primary,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      borderRadius: 16,
+    },
+    cartItemsBadgeText: {
+      color: '#fff',
+      fontWeight: 'bold',
+    },
+    cartItemsBadgeLarge: {
+      backgroundColor: theme.colors.primary,
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 20,
+    },
+    cartItemsBadgeTextLarge: {
+      color: '#fff',
+      fontWeight: 'bold',
+      fontSize: 16,
+    },
+
+    // Empty Cart Styles
+    emptyCartContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    emptyCartText: {
+      color: theme.colors.text,
+      fontSize: 16,
+      textAlign: 'center',
+    },
+
+    // Modal Styles
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContainer: {
+      backgroundColor: theme.colors.background,
+      borderRadius: 16,
+      padding: 24,
+      width: '100%',
+      maxWidth: 450,
+      maxHeight: '90%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 8,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: theme.colors.text,
+      marginBottom: 20,
+      textAlign: 'center',
+    },
+
+    // Discount Type Toggle Styles
+    discountTypeToggle: {
+      flexDirection: 'row',
+      marginBottom: 20,
+      backgroundColor: theme.colors.background,
+      borderRadius: 8,
+      padding: 4,
+    },
+    discountTypeButton: {
+      flex: 1,
+      paddingVertical: 8,
+      alignItems: 'center',
+      borderRadius: 6,
+    },
+    discountTypeButtonActive: {
+      backgroundColor: theme.colors.primary,
+    },
+    discountTypeButtonText: {
+      fontWeight: '500',
+    },
+    discountTypeButtonTextActive: {
+      color: '#fff',
+    },
+    discountTypeButtonTextInactive: {
+      color: theme.colors.text,
+    },
+
+    // Modal ScrollView
+    modalScrollView: {
+      maxHeight: 400,
+    },
+
+    // Coupon Input Styles
+    couponInput: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      fontSize: 16,
+      color: theme.colors.text,
+      backgroundColor: theme.colors.background,
+      marginBottom: 16,
+    },
+    couponListContainer: {
+      marginBottom: 20,
+    },
+    couponListTitle: {
+      color: theme.colors.text,
+      marginBottom: 8,
+      fontSize: 14,
+    },
+    couponItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      marginBottom: 4,
+      borderRadius: 8,
+    },
+    couponItemActive: {
+      backgroundColor: theme.colors.primary + '20',
+      borderWidth: 1,
+      borderColor: theme.colors.primary,
+    },
+    couponItemInactive: {
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+    },
+    couponCode: {
+      color: theme.colors.text,
+      fontWeight: '500',
+    },
+    couponName: {
+      color: theme.colors.primary,
+      fontSize: 12,
+    },
+
+    // Manual Discount Styles
+    manualDiscountSection: {
+      marginBottom: 16,
+    },
+    manualDiscountLabel: {
+      color: theme.colors.text,
+      marginBottom: 8,
+      fontSize: 16,
+      fontWeight: '500',
+    },
+    manualDiscountTypeRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    manualDiscountTypeButton: {
+      flex: 1,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      borderWidth: 1,
+      alignItems: 'center',
+    },
+    manualDiscountTypeButtonActive: {
+      borderColor: theme.colors.primary,
+      backgroundColor: theme.colors.primary + '10',
+    },
+    manualDiscountTypeButtonInactive: {
+      borderColor: theme.colors.border,
+      backgroundColor: 'transparent',
+    },
+    manualDiscountTypeText: {
+      fontWeight: '500',
+    },
+    manualDiscountTypeTextActive: {
+      color: theme.colors.primary,
+    },
+    manualDiscountTypeTextInactive: {
+      color: theme.colors.text,
+    },
+    manualDiscountInput: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      fontSize: 16,
+      color: theme.colors.text,
+      backgroundColor: theme.colors.background,
+    },
+    manualDiscountHint: {
+      color: theme.colors.text,
+      fontSize: 12,
+      marginTop: 4,
+    },
+
+    // Modal Button Styles
+    modalButtonRow: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 16,
+    },
+    modalCancelButton: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: theme.colors.border,
+      alignItems: 'center',
+    },
+    modalCancelButtonText: {
+      color: theme.colors.text,
+      fontWeight: '500',
+    },
+    modalApplyButton: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: theme.colors.primary,
+      alignItems: 'center',
+    },
+    modalApplyButtonText: {
+      color: '#fff',
       fontWeight: 'bold',
     },
   }));

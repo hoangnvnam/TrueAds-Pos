@@ -3,6 +3,10 @@ import { createStaticNavigation, StaticParamList, useFocusEffect } from '@react-
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
 import { Image } from 'react-native';
+import salesIcon from '~/assets/icons/cart.png';
+import reportsIcon from '~/assets/icons/chart.png';
+import settingsIcon from '~/assets/icons/menu.png';
+import inventoryIcon from '~/assets/icons/order.png';
 import { NotificationHandler } from '~/components/NotificationHandler';
 import { useSidebar } from '~/contexts/SidebarContext';
 import { useTheme } from '~/hooks/useTheme';
@@ -10,14 +14,6 @@ import { Layout } from '../components/Layout';
 import { PrivateRoute } from '../components/PrivateRoute';
 import { PublicRoute } from '../components/PublicRoute';
 import { privateRoutes, routes } from '../configs/routes';
-import salesIcon from '~/assets/icons/cart.png';
-import reportsIcon from '~/assets/icons/chart.png';
-import settingsIcon from '~/assets/icons/menu.png';
-import inventoryIcon from '~/assets/icons/order.png';
-import { Cashier } from '~/screens/Cashier';
-import { POSInventory } from '~/screens/Inventory';
-import { POSReports } from '~/screens/Reports';
-import { POSSettings } from '~/screens/Settings';
 
 const tabs = [
   {

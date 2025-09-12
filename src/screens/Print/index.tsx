@@ -457,7 +457,7 @@ function PrintConnection() {
           onPress={() => {
             navigation.canGoBack()
               ? navigation.goBack()
-              : navigation.reset({ index: 0, routes: [{ name: 'ServiceSelection' }] });
+              : navigation.reset({ index: 0, routes: [{ name: 'HomeTabs' }] });
           }}
         >
           <Ionicons name="arrow-back" size={18} color="#333" />

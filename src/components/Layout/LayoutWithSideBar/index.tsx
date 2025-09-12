@@ -17,10 +17,7 @@ export function LayoutSidebar({ children, style, back }: LayoutProps) {
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      const isServiceSelection = navigation.getState().routes[0].name === 'ServiceSelection';
-      if (isServiceSelection) {
-        navigation.replace('AccessToStore');
-      }
+      navigation.replace('AccessToStore');
     }
   };
   return (

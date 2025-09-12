@@ -82,9 +82,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }) => {
     let url = 'https://trueads.ai/register';
     if (social === 'facebook') {
-      url += `?profile=${encodeURIComponent(`${name}&${email}&${fbId}&facebook`)}&app=trueads`;
+      url += `?profile=${encodeURIComponent(`${name}&${email}&${fbId}&facebook`)}&app=trueadspos`;
     } else if (email && name) {
-      url += `?profile=${encodeURIComponent(`${email || ''}&${name || ''}&${social || ''}`)}&app=trueads`;
+      url += `?profile=${encodeURIComponent(`${email || ''}&${name || ''}&${social || ''}`)}&app=trueadspos`;
     }
 
     Alert.alert(

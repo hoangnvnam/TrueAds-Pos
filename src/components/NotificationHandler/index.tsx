@@ -9,12 +9,12 @@ export const NotificationHandler = () => {
   useLayoutEffect(() => {
     if (gotoMessages) {
       try {
-        if (gotoMessages) {
-          navi.navigate('Messages', {
-            param: gotoMessages,
-          });
-          setGotoMessages(null);
-        }
+        // if (gotoMessages) {
+        //   navi.navigate('Messages', {
+        //     param: gotoMessages,
+        //   });
+        //   setGotoMessages(null);
+        // }
       } catch (error) {
         setGotoMessages(null);
       }

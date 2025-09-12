@@ -161,20 +161,13 @@ export function AccessToStore() {
         });
 
         if (statusChild === 200) {
-          if (dataChild.data?.fbAuthResponse) {
-            await AsyncStorage.setItem('fbAuthResponse', dataChild.data.fbAuthResponse);
-          }
-          if (dataChild.data?.zaloAuthResponse) {
-            await AsyncStorage.setItem('zaloAuthResponse', dataChild.data.zaloAuthResponse);
-          }
           delete dataChild.data.fbAuthResponse;
           delete dataChild.data.zaloAuthResponse;
           delete dataChild.data.assignedConversations;
 
           await AsyncStorage.setItem('authChild', JSON.stringify(dataChild.data));
           setAuthChild(dataChild.data);
-          // navigation.replace('HomeTabs');
-          navigation.replace('ServiceSelection');
+          navigation.replace('HomeTabs');
         }
       }
     } catch (error: any) {
