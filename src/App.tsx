@@ -53,7 +53,7 @@ function AppContent() {
                           <Navigation
                             linking={{
                               enabled: 'auto',
-                              prefixes: ['trueads://', 'https://trueads.ai', 'http://trueads.ai'],
+                              prefixes: ['trueadspos://'],
                             }}
                           />
                         </>

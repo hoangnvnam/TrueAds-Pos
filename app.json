@@ -22,14 +22,7 @@
         "NSCameraUsageDescription": "TrueAds sử dụng camera để quét mã vạch nhằm xác định sản phẩm (ví dụ: lấy mã SKU để hiển thị thông tin sản phẩm).",
         "NSPhotoLibraryUsageDescription": "TrueAds truy cập thư viện ảnh để bạn có thể quét mã vạch nhằm xác định sản phẩm (ví dụ: lấy mã SKU để hiển thị thông tin sản phẩm).",
         "NSLocalNetworkUsageDescription": "TrueAds cần truy cập mạng cục bộ để tìm và kết nối tới máy in trong cùng mạng LAN (ví dụ Xprinter T80W).",
-        "NSBonjourServices": [
-          "_ipp._tcp",
-          "_printer._tcp",
-          "_pdl-datastream._tcp",
-          "_ipp._tcp",
-          "_printer._tcp",
-          "_pdl-datastream._tcp"
-        ],
+        "NSBonjourServices": ["_ipp._tcp", "_printer._tcp", "_pdl-datastream._tcp"],
         "NSBluetoothAlwaysUsageDescription": "TrueAds sử dụng Bluetooth để kết nối tới máy in (nếu máy in hỗ trợ Bluetooth).",
         "NSBluetoothPeripheralUsageDescription": "TrueAds cần sử dụng Bluetooth để tìm kiếm và kết nối với máy in hỗ trợ Bluetooth gần đây.",
         "NSUserTrackingUsageDescription": "TrueAds sử dụng thông tin này để cải thiện trải nghiệm người dùng và cung cấp quảng cáo phù hợp hơn.",
@@ -59,8 +52,6 @@
       },
       "package": "pos.trueads.ai",
       "permissions": [
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "com.google.android.gms.permission.AD_ID",
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
@@ -74,9 +65,7 @@
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "com.google.android.gms.permission.AD_ID"
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "googleServicesFile": "./google-services.json"
     },
