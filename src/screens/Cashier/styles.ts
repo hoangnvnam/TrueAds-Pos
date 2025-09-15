@@ -594,6 +594,7 @@ export function useCashierStyles() {
       flex: 1,
     },
     cartModalContainer: {
+      backgroundColor: theme.colors.background,
       height: '80%',
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,

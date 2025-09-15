@@ -53,6 +53,7 @@ export function Cashier() {
   const [manualDiscountValue, setManualDiscountValue] = useState('');
   const [viewMode, setViewMode] = useState<'split' | 'fullscreen'>('split');
   const [cartModalVisible, setCartModalVisible] = useState(false);
+  const [orientationChangeTimeout, setOrientationChangeTimeout] = useState<NodeJS.Timeout | null>(null);
 
   // Mock discount codes for demo
   const discountCodes = {
@@ -77,17 +78,32 @@ export function Cashier() {
 
   const categories = ['Tất cả', 'Đồ uống', 'Thực phẩm', 'Snack'];
 
-  // Listen to orientation changes
+  // Listen to orientation changes with debounce
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
-      setScreenData(window);
+      // Clear existing timeout
+      if (orientationChangeTimeout) {
+        clearTimeout(orientationChangeTimeout);
+      }
+
+      // Set new timeout to debounce orientation changes
+      const timeout = setTimeout(() => {
+        setScreenData(window);
+      }, 150); // 150ms debounce
+
+      setOrientationChangeTimeout(timeout);
     });
 
-    return () => subscription?.remove();
-  }, []);
+    return () => {
+      subscription?.remove();
+      if (orientationChangeTimeout) {
+        clearTimeout(orientationChangeTimeout);
+      }
+    };
+  }, [orientationChangeTimeout]);
 
-  // Check if device is in landscape mode
-  const isLandscape = screenData.width > screenData.height;
+  // Check if device is in landscape mode with threshold to prevent flickering
+  const isLandscape = screenData.width > screenData.height + 50; // Add threshold to prevent edge case flickering
   const isTablet = Math.min(screenData.width, screenData.height) >= 600; // Consider tablet if smaller dimension >= 600
 
   const filteredProducts = dataProducts?.data?.filter((product: any) => {
@@ -322,6 +338,295 @@ export function Cashier() {
     }).format(amount);
   };
 
+  // Render Discount Modal - can be used in both portrait and landscape
+  const renderDiscountModal = () => (
+    <Modal
+      visible={discountModalVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => {
+        setDiscountModalVisible(false);
+        setDiscountCode('');
+        setManualDiscountValue('');
+        setSelectedItemForDiscount(null);
+        setDiscountType('coupon');
+      }}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
+          <Text style={styles.modalTitle}>Giảm giá sản phẩm</Text>
+
+          {/* Discount Type Toggle */}
+          <View style={styles.discountTypeToggle}>
+            <TouchableOpacity
+              onPress={() => setDiscountType('coupon')}
+              style={[styles.discountTypeButton, discountType === 'coupon' && styles.discountTypeButtonActive]}
+            >
+              <Text
+                style={[
+                  styles.discountTypeButtonText,
+                  discountType === 'coupon'
+                    ? styles.discountTypeButtonTextActive
+                    : styles.discountTypeButtonTextInactive,
+                ]}
+              >
+                Mã giảm giá
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setDiscountType('manual')}
+              style={[styles.discountTypeButton, discountType === 'manual' && styles.discountTypeButtonActive]}
+            >
+              <Text
+                style={[
+                  styles.discountTypeButtonText,
+                  discountType === 'manual'
+                    ? styles.discountTypeButtonTextActive
+                    : styles.discountTypeButtonTextInactive,
+                ]}
+              >
+                Giảm thủ công
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollView}>
+            {discountType === 'coupon' ? (
+              <View>
+                <TextInput
+                  style={styles.couponInput}
+                  placeholder="Nhập mã giảm giá..."
+                  placeholderTextColor={theme.colors.text}
+                  value={discountCode}
+                  onChangeText={setDiscountCode}
+                  autoCapitalize="characters"
+                />
+
+                <View style={styles.couponListContainer}>
+                  <Text style={styles.couponListTitle}>Mã giảm giá có sẵn:</Text>
+                  {Object.entries(discountCodes).map(([code, details]) => (
+                    <TouchableOpacity
+                      key={code}
+                      onPress={() => setDiscountCode(code)}
+                      style={[
+                        styles.couponItem,
+                        discountCode === code ? styles.couponItemActive : styles.couponItemInactive,
+                      ]}
+                    >
+                      <Text style={styles.couponCode}>{code}</Text>
+                      <Text style={styles.couponName}>{details.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ) : (
+              <View>
+                {/* Manual Discount Type */}
+                <View style={styles.manualDiscountSection}>
+                  <Text style={styles.manualDiscountLabel}>Loại giảm giá:</Text>
+                  <View style={styles.manualDiscountTypeRow}>
+                    <TouchableOpacity
+                      onPress={() => setManualDiscountType('percentage')}
+                      style={[
+                        styles.manualDiscountTypeButton,
+                        manualDiscountType === 'percentage'
+                          ? styles.manualDiscountTypeButtonActive
+                          : styles.manualDiscountTypeButtonInactive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.manualDiscountTypeText,
+                          manualDiscountType === 'percentage'
+                            ? styles.manualDiscountTypeTextActive
+                            : styles.manualDiscountTypeTextInactive,
+                        ]}
+                      >
+                        Phần trăm (%)
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setManualDiscountType('fixed')}
+                      style={[
+                        styles.manualDiscountTypeButton,
+                        manualDiscountType === 'fixed'
+                          ? styles.manualDiscountTypeButtonActive
+                          : styles.manualDiscountTypeButtonInactive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.manualDiscountTypeText,
+                          manualDiscountType === 'fixed'
+                            ? styles.manualDiscountTypeTextActive
+                            : styles.manualDiscountTypeTextInactive,
+                        ]}
+                      >
+                        Số tiền cố định
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Manual Discount Value Input */}
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ color: theme.colors.text, marginBottom: 8, fontSize: 16, fontWeight: '500' }}>
+                    {manualDiscountType === 'percentage' ? 'Phần trăm giảm (%)' : 'Số tiền giảm (VND)'}:
+                  </Text>
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: theme.colors.border,
+                      borderRadius: 12,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      fontSize: 16,
+                      color: theme.colors.text,
+                      backgroundColor: theme.colors.background,
+                    }}
+                    placeholder={
+                      manualDiscountType === 'percentage' ? 'Nhập % giảm (vd: 15)' : 'Nhập số tiền (vd: 50000)'
+                    }
+                    placeholderTextColor={theme.colors.text}
+                    value={manualDiscountValue}
+                    onChangeText={setManualDiscountValue}
+                    keyboardType="numeric"
+                  />
+                  {manualDiscountType === 'percentage' && (
+                    <Text style={{ color: theme.colors.text, fontSize: 12, marginTop: 4 }}>
+                      Lưu ý: Phần trăm phải nhỏ hơn hoặc bằng 100%
+                    </Text>
+                  )}
+                  {manualDiscountType === 'fixed' && selectedItemForDiscount && (
+                    <Text style={{ color: theme.colors.text, fontSize: 12, marginTop: 4 }}>
+                      Lưu ý: Số tiền phải nhỏ hơn hoặc bằng giá sản phẩm (
+                      {formatCurrency(cart.find((item) => item.id === selectedItemForDiscount)?.price || 0)})
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
+          </ScrollView>
+
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+            <TouchableOpacity
+              onPress={() => {
+                setDiscountModalVisible(false);
+                setDiscountCode('');
+                setManualDiscountValue('');
+                setSelectedItemForDiscount(null);
+                setDiscountType('coupon');
+              }}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: theme.colors.border,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: theme.colors.text, fontWeight: '500' }}>Hủy</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={applyDiscount}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: theme.colors.primary,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Áp dụng</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Render Cart Modal - optimized for both portrait and landscape
+  const renderCartModal = () => (
+    <Modal
+      visible={cartModalVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setCartModalVisible(false)}
+      supportedOrientations={['portrait', 'landscape']}
+    >
+      <View style={styles.cartModalOverlay}>
+        <TouchableOpacity
+          style={styles.cartModalBackdrop}
+          activeOpacity={1}
+          onPress={() => setCartModalVisible(false)}
+        />
+        <View style={[styles.cartModalContainer]}>
+          <View style={styles.cartModalHeader}>
+            <Text style={[styles.cartModalTitle, { color: theme.colors.text }]}>Giỏ hàng</Text>
+            <TouchableOpacity onPress={() => setCartModalVisible(false)}>
+              <Icon name="close" size={24} color={theme.colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          {cart.length === 0 ? (
+            <View style={styles.emptyCartContainer}>
+              <Text style={styles.emptyCartText}>Giỏ hàng trống{'\n'}Vui lòng thêm sản phẩm</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={cart}
+              renderItem={renderCartItem}
+              keyExtractor={(item) => item.id}
+              style={styles.cartModalList}
+              showsVerticalScrollIndicator={false}
+            />
+          )}
+
+          {/* Payment Summary */}
+          <View style={[styles.cartModalPayment, { borderTopColor: theme.colors.border }]}>
+            {getTotalDiscount() > 0 && (
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
+                <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
+                  {formatCurrency(getOriginalTotal())}
+                </Text>
+              </View>
+            )}
+
+            {getTotalDiscount() > 0 && (
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
+                <Text style={[styles.summaryValue, { color: '#28a745' }]}>-{formatCurrency(getTotalDiscount())}</Text>
+              </View>
+            )}
+
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>Thành tiền:</Text>
+              <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
+                {formatCurrency(getTotalAmount())}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.checkoutButton,
+                { backgroundColor: theme.colors.primary, opacity: cart.length === 0 ? 0.6 : 1 },
+              ]}
+              onPress={() => {
+                handleCheckout();
+                setCartModalVisible(false);
+              }}
+              disabled={cart.length === 0}
+            >
+              <Text style={styles.checkoutButtonText}>Thanh toán</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   const handleCheckout = () => {
     const originalTotal = getOriginalTotal();
     const discountTotal = getTotalDiscount();
@@ -458,86 +763,7 @@ export function Cashier() {
             </TouchableOpacity>
 
             {/* Cart Modal */}
-            <Modal
-              visible={cartModalVisible}
-              transparent={true}
-              animationType="slide"
-              onRequestClose={() => setCartModalVisible(false)}
-            >
-              <View style={styles.cartModalOverlay}>
-                <TouchableOpacity
-                  style={styles.cartModalBackdrop}
-                  activeOpacity={1}
-                  onPress={() => setCartModalVisible(false)}
-                />
-                <View style={[styles.cartModalContainer, { backgroundColor: theme.colors.cardBackground }]}>
-                  <View style={styles.cartModalHeader}>
-                    <Text style={[styles.cartModalTitle, { color: theme.colors.text }]}>Giỏ hàng</Text>
-                    <TouchableOpacity onPress={() => setCartModalVisible(false)}>
-                      <Icon name="close" size={24} color={theme.colors.text} />
-                    </TouchableOpacity>
-                  </View>
-
-                  {cart.length === 0 ? (
-                    <View style={styles.emptyCartContainer}>
-                      <Text style={styles.emptyCartText}>Giỏ hàng trống{'\n'}Vui lòng thêm sản phẩm</Text>
-                    </View>
-                  ) : (
-                    <FlatList
-                      data={cart}
-                      renderItem={renderCartItem}
-                      keyExtractor={(item) => item.id}
-                      style={styles.cartModalList}
-                      showsVerticalScrollIndicator={false}
-                    />
-                  )}
-
-                  {/* Payment Summary */}
-                  <View style={[styles.cartModalPayment, { borderTopColor: theme.colors.border }]}>
-                    {getTotalDiscount() > 0 && (
-                      <View style={styles.summaryRow}>
-                        <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
-                        <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-                          {formatCurrency(getOriginalTotal())}
-                        </Text>
-                      </View>
-                    )}
-
-                    {getTotalDiscount() > 0 && (
-                      <View style={styles.summaryRow}>
-                        <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
-                        <Text style={[styles.summaryValue, { color: '#28a745' }]}>
-                          -{formatCurrency(getTotalDiscount())}
-                        </Text>
-                      </View>
-                    )}
-
-                    <View style={styles.summaryRow}>
-                      <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>
-                        Thành tiền:
-                      </Text>
-                      <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
-                        {formatCurrency(getTotalAmount())}
-                      </Text>
-                    </View>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.checkoutButton,
-                        { backgroundColor: theme.colors.primary, opacity: cart.length === 0 ? 0.6 : 1 },
-                      ]}
-                      onPress={() => {
-                        handleCheckout();
-                        setCartModalVisible(false);
-                      }}
-                      disabled={cart.length === 0}
-                    >
-                      <Text style={styles.checkoutButtonText}>Thanh toán</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </Modal>
+            {renderCartModal()}
           </>
         )}
 
@@ -665,6 +891,9 @@ export function Cashier() {
             </View>
           )}
         </ScrollView>
+
+        {/* Discount Modal for Portrait */}
+        {renderDiscountModal()}
       </SafeAreaView>
     );
   }
@@ -687,86 +916,7 @@ export function Cashier() {
           </TouchableOpacity>
 
           {/* Cart Modal for fullscreen mode */}
-          <Modal
-            visible={cartModalVisible}
-            transparent={true}
-            animationType="slide"
-            onRequestClose={() => setCartModalVisible(false)}
-          >
-            <View style={styles.cartModalOverlay}>
-              <TouchableOpacity
-                style={styles.cartModalBackdrop}
-                activeOpacity={1}
-                onPress={() => setCartModalVisible(false)}
-              />
-              <View style={[styles.cartModalContainer, { backgroundColor: theme.colors.cardBackground }]}>
-                <View style={styles.cartModalHeader}>
-                  <Text style={[styles.cartModalTitle, { color: theme.colors.text }]}>Giỏ hàng</Text>
-                  <TouchableOpacity onPress={() => setCartModalVisible(false)}>
-                    <Icon name="close" size={24} color={theme.colors.text} />
-                  </TouchableOpacity>
-                </View>
-
-                {cart.length === 0 ? (
-                  <View style={styles.emptyCartContainer}>
-                    <Text style={styles.emptyCartText}>Giỏ hàng trống{'\n'}Vui lòng thêm sản phẩm</Text>
-                  </View>
-                ) : (
-                  <FlatList
-                    data={cart}
-                    renderItem={renderCartItem}
-                    keyExtractor={(item) => item.id}
-                    style={styles.cartModalList}
-                    showsVerticalScrollIndicator={false}
-                  />
-                )}
-
-                {/* Payment Summary */}
-                <View style={[styles.cartModalPayment, { borderTopColor: theme.colors.border }]}>
-                  {getTotalDiscount() > 0 && (
-                    <View style={styles.summaryRow}>
-                      <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
-                      <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-                        {formatCurrency(getOriginalTotal())}
-                      </Text>
-                    </View>
-                  )}
-
-                  {getTotalDiscount() > 0 && (
-                    <View style={styles.summaryRow}>
-                      <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
-                      <Text style={[styles.summaryValue, { color: '#28a745' }]}>
-                        -{formatCurrency(getTotalDiscount())}
-                      </Text>
-                    </View>
-                  )}
-
-                  <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>
-                      Thành tiền:
-                    </Text>
-                    <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
-                      {formatCurrency(getTotalAmount())}
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.checkoutButton,
-                      { backgroundColor: theme.colors.primary, opacity: cart.length === 0 ? 0.6 : 1 },
-                    ]}
-                    onPress={() => {
-                      handleCheckout();
-                      setCartModalVisible(false);
-                    }}
-                    disabled={cart.length === 0}
-                  >
-                    <Text style={styles.checkoutButtonText}>Thanh toán</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </Modal>
+          {renderCartModal()}
         </>
       )}
 
@@ -893,210 +1043,8 @@ export function Cashier() {
       </View>
 
       {/* Discount Modal */}
-      <Modal
-        visible={discountModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => {
-          setDiscountModalVisible(false);
-          setDiscountCode('');
-          setManualDiscountValue('');
-          setSelectedItemForDiscount(null);
-          setDiscountType('coupon');
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Giảm giá sản phẩm</Text>
-
-            {/* Discount Type Toggle */}
-            <View style={styles.discountTypeToggle}>
-              <TouchableOpacity
-                onPress={() => setDiscountType('coupon')}
-                style={[styles.discountTypeButton, discountType === 'coupon' && styles.discountTypeButtonActive]}
-              >
-                <Text
-                  style={[
-                    styles.discountTypeButtonText,
-                    discountType === 'coupon'
-                      ? styles.discountTypeButtonTextActive
-                      : styles.discountTypeButtonTextInactive,
-                  ]}
-                >
-                  Mã giảm giá
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setDiscountType('manual')}
-                style={[styles.discountTypeButton, discountType === 'manual' && styles.discountTypeButtonActive]}
-              >
-                <Text
-                  style={[
-                    styles.discountTypeButtonText,
-                    discountType === 'manual'
-                      ? styles.discountTypeButtonTextActive
-                      : styles.discountTypeButtonTextInactive,
-                  ]}
-                >
-                  Giảm thủ công
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollView}>
-              {discountType === 'coupon' ? (
-                <View>
-                  <TextInput
-                    style={styles.couponInput}
-                    placeholder="Nhập mã giảm giá..."
-                    placeholderTextColor={theme.colors.text}
-                    value={discountCode}
-                    onChangeText={setDiscountCode}
-                    autoCapitalize="characters"
-                  />
-
-                  <View style={styles.couponListContainer}>
-                    <Text style={styles.couponListTitle}>Mã giảm giá có sẵn:</Text>
-                    {Object.entries(discountCodes).map(([code, details]) => (
-                      <TouchableOpacity
-                        key={code}
-                        onPress={() => setDiscountCode(code)}
-                        style={[
-                          styles.couponItem,
-                          discountCode === code ? styles.couponItemActive : styles.couponItemInactive,
-                        ]}
-                      >
-                        <Text style={styles.couponCode}>{code}</Text>
-                        <Text style={styles.couponName}>{details.name}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              ) : (
-                <View>
-                  {/* Manual Discount Type */}
-                  <View style={styles.manualDiscountSection}>
-                    <Text style={styles.manualDiscountLabel}>Loại giảm giá:</Text>
-                    <View style={styles.manualDiscountTypeRow}>
-                      <TouchableOpacity
-                        onPress={() => setManualDiscountType('percentage')}
-                        style={[
-                          styles.manualDiscountTypeButton,
-                          manualDiscountType === 'percentage'
-                            ? styles.manualDiscountTypeButtonActive
-                            : styles.manualDiscountTypeButtonInactive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.manualDiscountTypeText,
-                            manualDiscountType === 'percentage'
-                              ? styles.manualDiscountTypeTextActive
-                              : styles.manualDiscountTypeTextInactive,
-                          ]}
-                        >
-                          Phần trăm (%)
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => setManualDiscountType('fixed')}
-                        style={[
-                          styles.manualDiscountTypeButton,
-                          manualDiscountType === 'fixed'
-                            ? styles.manualDiscountTypeButtonActive
-                            : styles.manualDiscountTypeButtonInactive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.manualDiscountTypeText,
-                            manualDiscountType === 'fixed'
-                              ? styles.manualDiscountTypeTextActive
-                              : styles.manualDiscountTypeTextInactive,
-                          ]}
-                        >
-                          Số tiền cố định
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  {/* Manual Discount Value Input */}
-                  <View style={{ marginBottom: 16 }}>
-                    <Text style={{ color: theme.colors.text, marginBottom: 8, fontSize: 16, fontWeight: '500' }}>
-                      {manualDiscountType === 'percentage' ? 'Phần trăm giảm (%)' : 'Số tiền giảm (VND)'}:
-                    </Text>
-                    <TextInput
-                      style={{
-                        borderWidth: 1,
-                        borderColor: theme.colors.border,
-                        borderRadius: 12,
-                        paddingHorizontal: 16,
-                        paddingVertical: 12,
-                        fontSize: 16,
-                        color: theme.colors.text,
-                        backgroundColor: theme.colors.background,
-                      }}
-                      placeholder={
-                        manualDiscountType === 'percentage' ? 'Nhập % giảm (vd: 15)' : 'Nhập số tiền (vd: 50000)'
-                      }
-                      placeholderTextColor={theme.colors.text}
-                      value={manualDiscountValue}
-                      onChangeText={setManualDiscountValue}
-                      keyboardType="numeric"
-                    />
-                    {manualDiscountType === 'percentage' && (
-                      <Text style={{ color: theme.colors.text, fontSize: 12, marginTop: 4 }}>
-                        Lưu ý: Phần trăm phải nhỏ hơn hoặc bằng 100%
-                      </Text>
-                    )}
-                    {manualDiscountType === 'fixed' && selectedItemForDiscount && (
-                      <Text style={{ color: theme.colors.text, fontSize: 12, marginTop: 4 }}>
-                        Lưu ý: Số tiền phải nhỏ hơn hoặc bằng giá sản phẩm (
-                        {formatCurrency(cart.find((item) => item.id === selectedItemForDiscount)?.price || 0)})
-                      </Text>
-                    )}
-                  </View>
-                </View>
-              )}
-            </ScrollView>
-
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-              <TouchableOpacity
-                onPress={() => {
-                  setDiscountModalVisible(false);
-                  setDiscountCode('');
-                  setManualDiscountValue('');
-                  setSelectedItemForDiscount(null);
-                  setDiscountType('coupon');
-                }}
-                style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  borderRadius: 12,
-                  backgroundColor: theme.colors.border,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ color: theme.colors.text, fontWeight: '500' }}>Hủy</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={applyDiscount}
-                style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  borderRadius: 12,
-                  backgroundColor: theme.colors.primary,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Áp dụng</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* Discount Modal for Landscape */}
+      {renderDiscountModal()}
     </SafeAreaView>
   );
 }
