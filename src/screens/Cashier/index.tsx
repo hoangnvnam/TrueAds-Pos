@@ -546,444 +546,698 @@ export function Cashier() {
     }).format(amount);
   };
 
-  // Render Discount Modal - can be used in both portrait and landscape
-  const renderDiscountModal = () => (
-    <Modal
-      visible={discountModalVisible}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={() => {
-        setDiscountModalVisible(false);
-        setDiscountCode('');
-        setManualDiscountValue('');
-        setSelectedItemForDiscount(null);
-        setDiscountType('coupon');
-      }}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
-          <Text style={styles.modalTitle}>Giảm giá sản phẩm</Text>
+  // Reusable Components to reduce duplicate code
+  const renderOrderDiscountRow = React.useCallback(
+    () => (
+      <View style={styles.summaryRow}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+          <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
+          <TouchableOpacity
+            onPress={() => (orderDiscount ? removeOrderDiscount() : setOrderDiscountModalVisible(true))}
+            style={{
+              marginLeft: 8,
+              backgroundColor: orderDiscount ? '#dc3545' : theme.colors.primary,
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 4,
+            }}
+          >
+            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '500' }}>{orderDiscount ? '✕' : '+'}</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={[styles.summaryValue, { color: orderDiscount ? '#28a745' : theme.colors.text }]}>
+          {orderDiscount ? `-${formatCurrency(orderDiscount.amount)}` : '0đ'}
+        </Text>
+      </View>
+    ),
+    [
+      orderDiscount,
+      styles.summaryRow,
+      styles.summaryLabel,
+      styles.summaryValue,
+      theme.colors.text,
+      theme.colors.primary,
+      removeOrderDiscount,
+      formatCurrency,
+    ],
+  );
 
-          {/* Discount Type Toggle */}
-          <View style={styles.discountTypeToggle}>
-            <TouchableOpacity
-              onPress={() => setDiscountType('coupon')}
-              style={[styles.discountTypeButton, discountType === 'coupon' && styles.discountTypeButtonActive]}
-            >
-              <Text
-                style={[
-                  styles.discountTypeButtonText,
-                  discountType === 'coupon'
-                    ? styles.discountTypeButtonTextActive
-                    : styles.discountTypeButtonTextInactive,
-                ]}
-              >
-                Mã giảm giá
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setDiscountType('manual')}
-              style={[styles.discountTypeButton, discountType === 'manual' && styles.discountTypeButtonActive]}
-            >
-              <Text
-                style={[
-                  styles.discountTypeButtonText,
-                  discountType === 'manual'
-                    ? styles.discountTypeButtonTextActive
-                    : styles.discountTypeButtonTextInactive,
-                ]}
-              >
-                Giảm thủ công
-              </Text>
-            </TouchableOpacity>
+  const renderPromotionRow = React.useCallback(
+    () => (
+      <View style={styles.summaryRow}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+          <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Khuyến mãi:</Text>
+          <TouchableOpacity
+            onPress={() => (orderPromotion ? removeOrderPromotion() : setPromotionModalVisible(true))}
+            style={{
+              marginLeft: 8,
+              backgroundColor: orderPromotion ? '#dc3545' : theme.colors.primary,
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 4,
+            }}
+          >
+            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '500' }}>{orderPromotion ? '✕' : '+'}</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={[styles.summaryValue, { color: orderPromotion ? '#28a745' : theme.colors.text }]}>
+          {orderPromotion ? `-${formatCurrency(orderPromotion.amount)}` : '0đ'}
+        </Text>
+      </View>
+    ),
+    [
+      orderPromotion,
+      styles.summaryRow,
+      styles.summaryLabel,
+      styles.summaryValue,
+      theme.colors.text,
+      theme.colors.primary,
+      removeOrderPromotion,
+      formatCurrency,
+    ],
+  );
+
+  const renderAutoPrintToggle = React.useCallback(
+    () => (
+      <View style={[styles.summaryRow, { marginBottom: 16 }]}>
+        <Text style={[styles.summaryLabel, { color: theme.colors.text, flex: 1 }]}>Tự động in</Text>
+        <Switch
+          value={autoPrint}
+          onValueChange={updateAutoPrint}
+          trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+          thumbColor={autoPrint ? '#fff' : '#f4f3f4'}
+          ios_backgroundColor={theme.colors.border}
+        />
+      </View>
+    ),
+    [
+      autoPrint,
+      updateAutoPrint,
+      styles.summaryRow,
+      styles.summaryLabel,
+      theme.colors.text,
+      theme.colors.border,
+      theme.colors.primary,
+    ],
+  );
+
+  const renderToggleFooterButton = React.useCallback(
+    (source: string) => (
+      <TouchableOpacity
+        onPress={() => {
+          setFooterCollapsed(!footerCollapsed);
+        }}
+        style={{
+          alignSelf: 'center',
+          paddingVertical: 8,
+          paddingHorizontal: 16,
+          marginBottom: 8,
+          flexDirection: 'row',
+          alignItems: 'center',
+        }}
+      >
+        <Text style={[{ color: theme.colors.text, marginRight: 4, fontSize: 12 }]}>
+          {footerCollapsed ? 'Hiện chi tiết' : 'Ẩn chi tiết'}
+        </Text>
+        <Icon
+          name={footerCollapsed ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+          size={20}
+          color={theme.colors.text}
+        />
+      </TouchableOpacity>
+    ),
+    [footerCollapsed, theme.colors.text],
+  );
+
+  const renderOrderSummaryDetails = React.useCallback(
+    () => (
+      <>
+        {/* Order details when expanded */}
+        <View style={styles.summaryRow}>
+          <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
+          <Text style={[styles.summaryValue, { color: theme.colors.text }]}>{formatCurrency(getOriginalTotal())}</Text>
+        </View>
+
+        {getTotalDiscount() > 0 && (
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm SP:</Text>
+            <Text style={[styles.summaryValue, { color: '#28a745' }]}>-{formatCurrency(getTotalDiscount())}</Text>
           </View>
+        )}
 
-          <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollView}>
-            {discountType === 'coupon' ? (
-              <View>
-                <TextInput
-                  style={styles.couponInput}
-                  placeholder="Nhập mã giảm giá..."
-                  placeholderTextColor={theme.colors.text}
-                  value={discountCode}
-                  onChangeText={setDiscountCode}
-                  autoCapitalize="characters"
-                />
+        {(orderDiscount?.amount || 0) + (orderPromotion?.amount || 0) > 0 && (
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng tiết kiệm:</Text>
+            <Text style={[styles.summaryValue, { color: '#28a745' }]}>
+              -{formatCurrency(getTotalDiscount() + (orderDiscount?.amount || 0) + (orderPromotion?.amount || 0))}
+            </Text>
+          </View>
+        )}
+      </>
+    ),
+    [
+      styles.summaryRow,
+      styles.summaryLabel,
+      styles.summaryValue,
+      theme.colors.text,
+      formatCurrency,
+      getOriginalTotal,
+      getTotalDiscount,
+      orderDiscount?.amount,
+      orderPromotion?.amount,
+    ],
+  );
 
-                <View style={styles.couponListContainer}>
-                  <Text style={styles.couponListTitle}>Mã giảm giá có sẵn:</Text>
-                  {Object.entries(discountCodes).map(([code, details]) => (
-                    <TouchableOpacity
-                      key={code}
-                      onPress={() => setDiscountCode(code)}
-                      style={[
-                        styles.couponItem,
-                        discountCode === code ? styles.couponItemActive : styles.couponItemInactive,
-                      ]}
-                    >
-                      <Text style={styles.couponCode}>{code}</Text>
-                      <Text style={styles.couponName}>{details.name}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            ) : (
-              <View>
-                {/* Manual Discount Type */}
-                <View style={styles.manualDiscountSection}>
-                  <Text style={styles.manualDiscountLabel}>Loại giảm giá:</Text>
-                  <View style={styles.manualDiscountTypeRow}>
-                    <TouchableOpacity
-                      onPress={() => setManualDiscountType('percentage')}
-                      style={[
-                        styles.manualDiscountTypeButton,
-                        manualDiscountType === 'percentage'
-                          ? styles.manualDiscountTypeButtonActive
-                          : styles.manualDiscountTypeButtonInactive,
-                      ]}
-                    >
-                      <Text
+  // Render Discount Modal - can be used in both portrait and landscape
+  const renderDiscountModal = React.useCallback(
+    () => (
+      <Modal
+        visible={discountModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setDiscountModalVisible(false);
+          setDiscountCode('');
+          setManualDiscountValue('');
+          setSelectedItemForDiscount(null);
+          setDiscountType('coupon');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Giảm giá sản phẩm</Text>
+
+            {/* Discount Type Toggle */}
+            <View style={styles.discountTypeToggle}>
+              <TouchableOpacity
+                onPress={() => setDiscountType('coupon')}
+                style={[styles.discountTypeButton, discountType === 'coupon' && styles.discountTypeButtonActive]}
+              >
+                <Text
+                  style={[
+                    styles.discountTypeButtonText,
+                    discountType === 'coupon'
+                      ? styles.discountTypeButtonTextActive
+                      : styles.discountTypeButtonTextInactive,
+                  ]}
+                >
+                  Mã giảm giá
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setDiscountType('manual')}
+                style={[styles.discountTypeButton, discountType === 'manual' && styles.discountTypeButtonActive]}
+              >
+                <Text
+                  style={[
+                    styles.discountTypeButtonText,
+                    discountType === 'manual'
+                      ? styles.discountTypeButtonTextActive
+                      : styles.discountTypeButtonTextInactive,
+                  ]}
+                >
+                  Giảm thủ công
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollView}>
+              {discountType === 'coupon' ? (
+                <View>
+                  <TextInput
+                    style={styles.couponInput}
+                    placeholder="Nhập mã giảm giá..."
+                    placeholderTextColor={theme.colors.text}
+                    value={discountCode}
+                    onChangeText={setDiscountCode}
+                    autoCapitalize="characters"
+                  />
+
+                  <View style={styles.couponListContainer}>
+                    <Text style={styles.couponListTitle}>Mã giảm giá có sẵn:</Text>
+                    {Object.entries(discountCodes).map(([code, details]) => (
+                      <TouchableOpacity
+                        key={code}
+                        onPress={() => setDiscountCode(code)}
                         style={[
-                          styles.manualDiscountTypeText,
-                          manualDiscountType === 'percentage'
-                            ? styles.manualDiscountTypeTextActive
-                            : styles.manualDiscountTypeTextInactive,
+                          styles.couponItem,
+                          discountCode === code ? styles.couponItemActive : styles.couponItemInactive,
                         ]}
                       >
-                        Phần trăm (%)
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setManualDiscountType('fixed')}
-                      style={[
-                        styles.manualDiscountTypeButton,
-                        manualDiscountType === 'fixed'
-                          ? styles.manualDiscountTypeButtonActive
-                          : styles.manualDiscountTypeButtonInactive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.manualDiscountTypeText,
-                          manualDiscountType === 'fixed'
-                            ? styles.manualDiscountTypeTextActive
-                            : styles.manualDiscountTypeTextInactive,
-                        ]}
-                      >
-                        Số tiền cố định
-                      </Text>
-                    </TouchableOpacity>
+                        <Text style={styles.couponCode}>{code}</Text>
+                        <Text style={styles.couponName}>{details.name}</Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
                 </View>
+              ) : (
+                <View>
+                  {/* Manual Discount Type */}
+                  <View style={styles.manualDiscountSection}>
+                    <Text style={styles.manualDiscountLabel}>Loại giảm giá:</Text>
+                    <View style={styles.manualDiscountTypeRow}>
+                      <TouchableOpacity
+                        onPress={() => setManualDiscountType('percentage')}
+                        style={[
+                          styles.manualDiscountTypeButton,
+                          manualDiscountType === 'percentage'
+                            ? styles.manualDiscountTypeButtonActive
+                            : styles.manualDiscountTypeButtonInactive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.manualDiscountTypeText,
+                            manualDiscountType === 'percentage'
+                              ? styles.manualDiscountTypeTextActive
+                              : styles.manualDiscountTypeTextInactive,
+                          ]}
+                        >
+                          Phần trăm (%)
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setManualDiscountType('fixed')}
+                        style={[
+                          styles.manualDiscountTypeButton,
+                          manualDiscountType === 'fixed'
+                            ? styles.manualDiscountTypeButtonActive
+                            : styles.manualDiscountTypeButtonInactive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.manualDiscountTypeText,
+                            manualDiscountType === 'fixed'
+                              ? styles.manualDiscountTypeTextActive
+                              : styles.manualDiscountTypeTextInactive,
+                          ]}
+                        >
+                          Số tiền cố định
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
 
-                {/* Manual Discount Value Input */}
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{ color: theme.colors.text, marginBottom: 8, fontSize: 16, fontWeight: '500' }}>
-                    {manualDiscountType === 'percentage' ? 'Phần trăm giảm (%)' : 'Số tiền giảm (VND)'}:
-                  </Text>
-                  <TextInput
-                    style={{
-                      borderWidth: 1,
-                      borderColor: theme.colors.border,
-                      borderRadius: 12,
-                      paddingHorizontal: 16,
-                      paddingVertical: 12,
-                      fontSize: 16,
-                      color: theme.colors.text,
-                      backgroundColor: theme.colors.background,
-                    }}
-                    placeholder={
-                      manualDiscountType === 'percentage' ? 'Nhập % giảm (vd: 15)' : 'Nhập số tiền (vd: 50000)'
-                    }
-                    placeholderTextColor={theme.colors.text}
-                    value={manualDiscountValue}
-                    onChangeText={setManualDiscountValue}
-                    keyboardType="numeric"
-                  />
-                  {manualDiscountType === 'percentage' && (
-                    <Text style={{ color: theme.colors.text, fontSize: 12, marginTop: 4 }}>
-                      Lưu ý: Phần trăm phải nhỏ hơn hoặc bằng 100%
+                  {/* Manual Discount Value Input */}
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ color: theme.colors.text, marginBottom: 8, fontSize: 16, fontWeight: '500' }}>
+                      {manualDiscountType === 'percentage' ? 'Phần trăm giảm (%)' : 'Số tiền giảm (VND)'}:
                     </Text>
-                  )}
-                  {manualDiscountType === 'fixed' && selectedItemForDiscount && (
-                    <Text style={{ color: theme.colors.text, fontSize: 12, marginTop: 4 }}>
-                      Lưu ý: Số tiền phải nhỏ hơn hoặc bằng giá sản phẩm (
-                      {formatCurrency(cart.find((item) => item.id === selectedItemForDiscount)?.price || 0)})
-                    </Text>
-                  )}
+                    <TextInput
+                      style={{
+                        borderWidth: 1,
+                        borderColor: theme.colors.border,
+                        borderRadius: 12,
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                        fontSize: 16,
+                        color: theme.colors.text,
+                        backgroundColor: theme.colors.background,
+                      }}
+                      placeholder={
+                        manualDiscountType === 'percentage' ? 'Nhập % giảm (vd: 15)' : 'Nhập số tiền (vd: 50000)'
+                      }
+                      placeholderTextColor={theme.colors.text}
+                      value={manualDiscountValue}
+                      onChangeText={setManualDiscountValue}
+                      keyboardType="numeric"
+                    />
+                    {manualDiscountType === 'percentage' && (
+                      <Text style={{ color: theme.colors.text, fontSize: 12, marginTop: 4 }}>
+                        Lưu ý: Phần trăm phải nhỏ hơn hoặc bằng 100%
+                      </Text>
+                    )}
+                    {manualDiscountType === 'fixed' && selectedItemForDiscount && (
+                      <Text style={{ color: theme.colors.text, fontSize: 12, marginTop: 4 }}>
+                        Lưu ý: Số tiền phải nhỏ hơn hoặc bằng giá sản phẩm (
+                        {formatCurrency(cart.find((item) => item.id === selectedItemForDiscount)?.price || 0)})
+                      </Text>
+                    )}
+                  </View>
                 </View>
-              </View>
-            )}
-          </ScrollView>
+              )}
+            </ScrollView>
 
-          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-            <TouchableOpacity
-              onPress={() => {
-                setDiscountModalVisible(false);
-                setDiscountCode('');
-                setManualDiscountValue('');
-                setSelectedItemForDiscount(null);
-                setDiscountType('coupon');
-              }}
-              style={{
-                flex: 1,
-                paddingVertical: 12,
-                borderRadius: 12,
-                backgroundColor: theme.colors.border,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ color: theme.colors.text, fontWeight: '500' }}>Hủy</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setDiscountModalVisible(false);
+                  setDiscountCode('');
+                  setManualDiscountValue('');
+                  setSelectedItemForDiscount(null);
+                  setDiscountType('coupon');
+                }}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  backgroundColor: theme.colors.border,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: theme.colors.text, fontWeight: '500' }}>Hủy</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={applyDiscount}
-              style={{
-                flex: 1,
-                paddingVertical: 12,
-                borderRadius: 12,
-                backgroundColor: theme.colors.primary,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Áp dụng</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={applyDiscount}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  backgroundColor: theme.colors.primary,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Áp dụng</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
+    ),
+    [
+      discountModalVisible,
+      discountType,
+      discountCode,
+      manualDiscountType,
+      manualDiscountValue,
+      selectedItemForDiscount,
+      theme.colors.text,
+      styles.modalOverlay,
+      styles.modalContainer,
+      styles.modalTitle,
+      styles.discountTypeToggle,
+      styles.discountTypeButton,
+      styles.discountTypeButtonActive,
+      styles.discountTypeButtonText,
+      styles.discountTypeButtonTextActive,
+      styles.discountTypeButtonTextInactive,
+      styles.modalScrollView,
+      styles.couponInput,
+      styles.couponListContainer,
+      styles.couponListTitle,
+      styles.couponItem,
+      styles.couponItemActive,
+      styles.couponItemInactive,
+      styles.couponCode,
+      styles.couponName,
+      styles.manualDiscountSection,
+      styles.manualDiscountLabel,
+      styles.manualDiscountTypeRow,
+      styles.manualDiscountTypeButton,
+      styles.manualDiscountTypeButtonActive,
+      styles.manualDiscountTypeButtonInactive,
+      styles.manualDiscountTypeText,
+      styles.manualDiscountTypeTextActive,
+      styles.manualDiscountTypeTextInactive,
+      styles.manualDiscountInput,
+      styles.modalButtons,
+      styles.modalCancelButton,
+      styles.modalCancelButtonText,
+      styles.modalApplyButton,
+      styles.modalApplyButtonText,
+      discountCodes,
+      applyDiscount,
+    ],
   );
 
   // Render Order Discount Modal
-  const renderOrderDiscountModal = () => (
-    <Modal
-      visible={orderDiscountModalVisible}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={() => {
-        setOrderDiscountModalVisible(false);
-        setOrderDiscountValue('');
-        setOrderDiscountType('percentage');
-      }}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
-          <Text style={styles.modalTitle}>Giảm giá tổng đơn</Text>
+  const renderOrderDiscountModal = React.useCallback(
+    () => (
+      <Modal
+        visible={orderDiscountModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setOrderDiscountModalVisible(false);
+          setOrderDiscountValue('');
+          setOrderDiscountType('percentage');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Giảm giá tổng đơn</Text>
 
-          <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollView}>
-            {/* Order Discount Type */}
-            <View style={styles.manualDiscountSection}>
-              <Text style={styles.manualDiscountLabel}>Loại giảm giá:</Text>
-              <View style={styles.manualDiscountTypeRow}>
-                <TouchableOpacity
-                  onPress={() => setOrderDiscountType('percentage')}
-                  style={[
-                    styles.manualDiscountTypeButton,
-                    orderDiscountType === 'percentage'
-                      ? styles.manualDiscountTypeButtonActive
-                      : styles.manualDiscountTypeButtonInactive,
-                  ]}
-                >
-                  <Text
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollView}>
+              {/* Order Discount Type */}
+              <View style={styles.manualDiscountSection}>
+                <Text style={styles.manualDiscountLabel}>Loại giảm giá:</Text>
+                <View style={styles.manualDiscountTypeRow}>
+                  <TouchableOpacity
+                    onPress={() => setOrderDiscountType('percentage')}
                     style={[
-                      styles.manualDiscountTypeText,
+                      styles.manualDiscountTypeButton,
                       orderDiscountType === 'percentage'
-                        ? styles.manualDiscountTypeTextActive
-                        : styles.manualDiscountTypeTextInactive,
+                        ? styles.manualDiscountTypeButtonActive
+                        : styles.manualDiscountTypeButtonInactive,
                     ]}
                   >
-                    Phần trăm (%)
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setOrderDiscountType('fixed')}
-                  style={[
-                    styles.manualDiscountTypeButton,
-                    orderDiscountType === 'fixed'
-                      ? styles.manualDiscountTypeButtonActive
-                      : styles.manualDiscountTypeButtonInactive,
-                  ]}
-                >
-                  <Text
+                    <Text
+                      style={[
+                        styles.manualDiscountTypeText,
+                        orderDiscountType === 'percentage'
+                          ? styles.manualDiscountTypeTextActive
+                          : styles.manualDiscountTypeTextInactive,
+                      ]}
+                    >
+                      Phần trăm (%)
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setOrderDiscountType('fixed')}
                     style={[
-                      styles.manualDiscountTypeText,
+                      styles.manualDiscountTypeButton,
                       orderDiscountType === 'fixed'
-                        ? styles.manualDiscountTypeTextActive
-                        : styles.manualDiscountTypeTextInactive,
+                        ? styles.manualDiscountTypeButtonActive
+                        : styles.manualDiscountTypeButtonInactive,
                     ]}
                   >
-                    Số tiền cố định
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      style={[
+                        styles.manualDiscountTypeText,
+                        orderDiscountType === 'fixed'
+                          ? styles.manualDiscountTypeTextActive
+                          : styles.manualDiscountTypeTextInactive,
+                      ]}
+                    >
+                      Số tiền cố định
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
 
-            {/* Order Discount Value Input */}
-            <View style={{ marginBottom: 16 }}>
-              <Text style={{ color: theme.colors.text, marginBottom: 8, fontSize: 16, fontWeight: '500' }}>
-                {orderDiscountType === 'percentage' ? 'Phần trăm giảm (%)' : 'Số tiền giảm (VND)'}:
-              </Text>
-              <TextInput
-                style={{
-                  borderWidth: 1,
-                  borderColor: theme.colors.border,
-                  borderRadius: 12,
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
-                  fontSize: 16,
-                  color: theme.colors.text,
-                  backgroundColor: theme.colors.background,
+              {/* Order Discount Value Input */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: theme.colors.text, marginBottom: 8, fontSize: 16, fontWeight: '500' }}>
+                  {orderDiscountType === 'percentage' ? 'Phần trăm giảm (%)' : 'Số tiền giảm (VND)'}:
+                </Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    fontSize: 16,
+                    color: theme.colors.text,
+                    backgroundColor: theme.colors.background,
+                  }}
+                  placeholder={orderDiscountType === 'percentage' ? 'Nhập % giảm (vd: 15)' : 'Nhập số tiền (vd: 50000)'}
+                  placeholderTextColor={theme.colors.text}
+                  value={orderDiscountValue}
+                  onChangeText={setOrderDiscountValue}
+                  keyboardType="numeric"
+                />
+                {orderDiscountType === 'percentage' && (
+                  <Text style={{ color: theme.colors.text, fontSize: 12, marginTop: 4 }}>
+                    Lưu ý: Phần trăm phải nhỏ hơn hoặc bằng 100%
+                  </Text>
+                )}
+                {orderDiscountType === 'fixed' && (
+                  <Text style={{ color: theme.colors.text, fontSize: 12, marginTop: 4 }}>
+                    Lưu ý: Số tiền phải nhỏ hơn hoặc bằng tổng tiền hàng ({formatCurrency(getOrderSubtotal())})
+                  </Text>
+                )}
+              </View>
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setOrderDiscountModalVisible(false);
+                  setOrderDiscountValue('');
+                  setOrderDiscountType('percentage');
                 }}
-                placeholder={orderDiscountType === 'percentage' ? 'Nhập % giảm (vd: 15)' : 'Nhập số tiền (vd: 50000)'}
-                placeholderTextColor={theme.colors.text}
-                value={orderDiscountValue}
-                onChangeText={setOrderDiscountValue}
-                keyboardType="numeric"
-              />
-              {orderDiscountType === 'percentage' && (
-                <Text style={{ color: theme.colors.text, fontSize: 12, marginTop: 4 }}>
-                  Lưu ý: Phần trăm phải nhỏ hơn hoặc bằng 100%
-                </Text>
-              )}
-              {orderDiscountType === 'fixed' && (
-                <Text style={{ color: theme.colors.text, fontSize: 12, marginTop: 4 }}>
-                  Lưu ý: Số tiền phải nhỏ hơn hoặc bằng tổng tiền hàng ({formatCurrency(getOrderSubtotal())})
-                </Text>
-              )}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  backgroundColor: theme.colors.border,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: theme.colors.text, fontWeight: '500' }}>Hủy</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={applyOrderDiscount}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  backgroundColor: theme.colors.primary,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Áp dụng</Text>
+              </TouchableOpacity>
             </View>
-          </ScrollView>
-
-          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-            <TouchableOpacity
-              onPress={() => {
-                setOrderDiscountModalVisible(false);
-                setOrderDiscountValue('');
-                setOrderDiscountType('percentage');
-              }}
-              style={{
-                flex: 1,
-                paddingVertical: 12,
-                borderRadius: 12,
-                backgroundColor: theme.colors.border,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ color: theme.colors.text, fontWeight: '500' }}>Hủy</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={applyOrderDiscount}
-              style={{
-                flex: 1,
-                paddingVertical: 12,
-                borderRadius: 12,
-                backgroundColor: theme.colors.primary,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Áp dụng</Text>
-            </TouchableOpacity>
           </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
+    ),
+    [
+      orderDiscountModalVisible,
+      orderDiscountType,
+      orderDiscountValue,
+      theme.colors.text,
+      styles.modalOverlay,
+      styles.modalContainer,
+      styles.modalTitle,
+      styles.modalScrollView,
+      styles.manualDiscountSection,
+      styles.manualDiscountLabel,
+      styles.manualDiscountTypeRow,
+      styles.manualDiscountTypeButton,
+      styles.manualDiscountTypeButtonActive,
+      styles.manualDiscountTypeButtonInactive,
+      styles.manualDiscountTypeText,
+      styles.manualDiscountTypeTextActive,
+      styles.manualDiscountTypeTextInactive,
+      styles.manualDiscountInput,
+      styles.modalButtons,
+      styles.modalCancelButton,
+      styles.modalCancelButtonText,
+      styles.modalApplyButton,
+      styles.modalApplyButtonText,
+      applyOrderDiscount,
+    ],
   );
 
   // Render Promotion Modal
-  const renderPromotionModal = () => (
-    <Modal
-      visible={promotionModalVisible}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={() => {
-        setPromotionModalVisible(false);
-        setPromotionCode('');
-      }}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
-          <Text style={styles.modalTitle}>Mã khuyến mãi</Text>
+  const renderPromotionModal = React.useCallback(
+    () => (
+      <Modal
+        visible={promotionModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setPromotionModalVisible(false);
+          setPromotionCode('');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Mã khuyến mãi</Text>
 
-          <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollView}>
-            <View style={{ marginBottom: 16 }}>
-              <Text style={{ color: theme.colors.text, marginBottom: 8, fontSize: 16, fontWeight: '500' }}>
-                Mã khuyến mãi:
-              </Text>
-              <TextInput
-                style={{
-                  borderWidth: 1,
-                  borderColor: theme.colors.border,
-                  borderRadius: 12,
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
-                  fontSize: 16,
-                  color: theme.colors.text,
-                  backgroundColor: theme.colors.background,
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollView}>
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: theme.colors.text, marginBottom: 8, fontSize: 16, fontWeight: '500' }}>
+                  Mã khuyến mãi:
+                </Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    fontSize: 16,
+                    color: theme.colors.text,
+                    backgroundColor: theme.colors.background,
+                  }}
+                  placeholder="Nhập mã khuyến mãi..."
+                  placeholderTextColor={theme.colors.text}
+                  value={promotionCode}
+                  onChangeText={setPromotionCode}
+                  autoCapitalize="characters"
+                />
+              </View>
+
+              <View style={styles.couponListContainer}>
+                <Text style={styles.couponListTitle}>Mã khuyến mãi có sẵn:</Text>
+                {[
+                  { code: 'SUMMER2024', name: 'Ưu đãi mùa hè - Giảm 15%' },
+                  { code: 'NEWUSER', name: 'Khách hàng mới - Giảm 50K' },
+                  { code: 'VIP100', name: 'VIP - Giảm 100K' },
+                  { code: 'PERCENT20', name: 'Giảm 20%' },
+                ].map((promo) => (
+                  <TouchableOpacity
+                    key={promo.code}
+                    onPress={() => setPromotionCode(promo.code)}
+                    style={[
+                      styles.couponItem,
+                      promotionCode === promo.code ? styles.couponItemActive : styles.couponItemInactive,
+                    ]}
+                  >
+                    <Text style={styles.couponCode}>{promo.code}</Text>
+                    <Text style={styles.couponName}>{promo.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setPromotionModalVisible(false);
+                  setPromotionCode('');
                 }}
-                placeholder="Nhập mã khuyến mãi..."
-                placeholderTextColor={theme.colors.text}
-                value={promotionCode}
-                onChangeText={setPromotionCode}
-                autoCapitalize="characters"
-              />
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  backgroundColor: theme.colors.border,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: theme.colors.text, fontWeight: '500' }}>Hủy</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={applyPromotion}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  backgroundColor: theme.colors.primary,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Áp dụng</Text>
+              </TouchableOpacity>
             </View>
-
-            <View style={styles.couponListContainer}>
-              <Text style={styles.couponListTitle}>Mã khuyến mãi có sẵn:</Text>
-              {[
-                { code: 'SUMMER2024', name: 'Ưu đãi mùa hè - Giảm 15%' },
-                { code: 'NEWUSER', name: 'Khách hàng mới - Giảm 50K' },
-                { code: 'VIP100', name: 'VIP - Giảm 100K' },
-                { code: 'PERCENT20', name: 'Giảm 20%' },
-              ].map((promo) => (
-                <TouchableOpacity
-                  key={promo.code}
-                  onPress={() => setPromotionCode(promo.code)}
-                  style={[
-                    styles.couponItem,
-                    promotionCode === promo.code ? styles.couponItemActive : styles.couponItemInactive,
-                  ]}
-                >
-                  <Text style={styles.couponCode}>{promo.code}</Text>
-                  <Text style={styles.couponName}>{promo.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-
-          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-            <TouchableOpacity
-              onPress={() => {
-                setPromotionModalVisible(false);
-                setPromotionCode('');
-              }}
-              style={{
-                flex: 1,
-                paddingVertical: 12,
-                borderRadius: 12,
-                backgroundColor: theme.colors.border,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ color: theme.colors.text, fontWeight: '500' }}>Hủy</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={applyPromotion}
-              style={{
-                flex: 1,
-                paddingVertical: 12,
-                borderRadius: 12,
-                backgroundColor: theme.colors.primary,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Áp dụng</Text>
-            </TouchableOpacity>
           </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
+    ),
+    [
+      promotionModalVisible,
+      promotionCode,
+      theme.colors.text,
+      styles.modalOverlay,
+      styles.modalContainer,
+      styles.modalTitle,
+      styles.modalScrollView,
+      styles.couponInput,
+      styles.modalButtons,
+      styles.modalCancelButton,
+      styles.modalCancelButtonText,
+      styles.modalApplyButton,
+      styles.modalApplyButtonText,
+      applyPromotion,
+    ],
   );
 
   // Render Cart BottomSheet - optimized for both portrait and landscape
@@ -997,109 +1251,22 @@ export function Cashier() {
     const renderCartFooter = () => (
       <View style={[styles.cartModalPayment, { borderTopColor: theme.colors.border }]}>
         {/* Collapsible footer toggle */}
-        <TouchableOpacity
-          onPress={() => setFooterCollapsed(!footerCollapsed)}
-          style={{
-            alignSelf: 'center',
-            paddingVertical: 8,
-            paddingHorizontal: 16,
-            marginBottom: 8,
-            flexDirection: 'row',
-            alignItems: 'center',
-          }}
-        >
-          <Text style={[{ color: theme.colors.text, marginRight: 4, fontSize: 12 }]}>
-            {footerCollapsed ? 'Hiện chi tiết' : 'Ẩn chi tiết'}
-          </Text>
-          <Icon
-            name={footerCollapsed ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-            size={20}
-            color={theme.colors.text}
-          />
-        </TouchableOpacity>
+        {renderToggleFooterButton('BottomSheet')}
 
         {/* Collapsible section - Order Discount, Promotion, Auto Print */}
         {!footerCollapsed && (
           <>
             {/* Order Discount Row */}
-            <View style={styles.summaryRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
-                <TouchableOpacity
-                  onPress={() => (orderDiscount ? removeOrderDiscount() : setOrderDiscountModalVisible(true))}
-                  style={{
-                    marginLeft: 8,
-                    backgroundColor: orderDiscount ? '#dc3545' : theme.colors.primary,
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 4,
-                  }}
-                >
-                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '500' }}>{orderDiscount ? '✕' : '+'}</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={[styles.summaryValue, { color: orderDiscount ? '#28a745' : theme.colors.text }]}>
-                {orderDiscount ? `-${formatCurrency(orderDiscount.amount)}` : '0đ'}
-              </Text>
-            </View>
+            {renderOrderDiscountRow()}
 
             {/* Promotion Row */}
-            <View style={styles.summaryRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Khuyến mãi:</Text>
-                <TouchableOpacity
-                  onPress={() => (orderPromotion ? removeOrderPromotion() : setPromotionModalVisible(true))}
-                  style={{
-                    marginLeft: 8,
-                    backgroundColor: orderPromotion ? '#dc3545' : theme.colors.primary,
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 4,
-                  }}
-                >
-                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '500' }}>{orderPromotion ? '✕' : '+'}</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={[styles.summaryValue, { color: orderPromotion ? '#28a745' : theme.colors.text }]}>
-                {orderPromotion ? `-${formatCurrency(orderPromotion.amount)}` : '0đ'}
-              </Text>
-            </View>
+            {renderPromotionRow()}
 
             {/* Auto Print Toggle */}
-            <View style={[styles.summaryRow, { marginBottom: 16 }]}>
-              <Text style={[styles.summaryLabel, { color: theme.colors.text, flex: 1 }]}>Tự động in</Text>
-              <Switch
-                value={autoPrint}
-                onValueChange={updateAutoPrint}
-                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                thumbColor={autoPrint ? '#fff' : '#f4f3f4'}
-                ios_backgroundColor={theme.colors.border}
-              />
-            </View>
+            {renderAutoPrintToggle()}
 
             {/* Order details when expanded */}
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
-              <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-                {formatCurrency(getOriginalTotal())}
-              </Text>
-            </View>
-
-            {getTotalDiscount() > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm SP:</Text>
-                <Text style={[styles.summaryValue, { color: '#28a745' }]}>-{formatCurrency(getTotalDiscount())}</Text>
-              </View>
-            )}
-
-            {(orderDiscount?.amount || 0) + (orderPromotion?.amount || 0) > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng tiết kiệm:</Text>
-                <Text style={[styles.summaryValue, { color: '#28a745' }]}>
-                  -{formatCurrency(getTotalDiscount() + (orderDiscount?.amount || 0) + (orderPromotion?.amount || 0))}
-                </Text>
-              </View>
-            )}
+            {renderOrderSummaryDetails()}
           </>
         )}
 
@@ -1436,121 +1603,22 @@ export function Cashier() {
 
               <View style={[styles.portraitCheckout, { borderTopColor: theme.colors.border }]}>
                 {/* Collapsible footer toggle */}
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log('Portrait - Toggle footer clicked, current state:', footerCollapsed);
-                    setFooterCollapsed(!footerCollapsed);
-                  }}
-                  style={{
-                    alignSelf: 'center',
-                    paddingVertical: 8,
-                    paddingHorizontal: 16,
-                    marginBottom: 8,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={[{ color: theme.colors.text, marginRight: 4, fontSize: 12 }]}>
-                    {footerCollapsed ? 'Hiện chi tiết' : 'Ẩn chi tiết'}
-                  </Text>
-                  <Icon
-                    name={footerCollapsed ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                    size={20}
-                    color={theme.colors.text}
-                  />
-                </TouchableOpacity>
+                {renderToggleFooterButton('Portrait')}
 
                 {/* Collapsible section - Order Discount, Promotion, Auto Print */}
                 {!footerCollapsed && (
                   <>
                     {/* Order Discount Row */}
-                    <View style={styles.summaryRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                        <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
-                        <TouchableOpacity
-                          onPress={() => (orderDiscount ? removeOrderDiscount() : setOrderDiscountModalVisible(true))}
-                          style={{
-                            marginLeft: 8,
-                            backgroundColor: orderDiscount ? '#dc3545' : theme.colors.primary,
-                            paddingHorizontal: 8,
-                            paddingVertical: 4,
-                            borderRadius: 4,
-                          }}
-                        >
-                          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '500' }}>
-                            {orderDiscount ? '✕' : '+'}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                      <Text style={[styles.summaryValue, { color: orderDiscount ? '#28a745' : theme.colors.text }]}>
-                        {orderDiscount ? `-${formatCurrency(orderDiscount.amount)}` : '0đ'}
-                      </Text>
-                    </View>
+                    {renderOrderDiscountRow()}
 
                     {/* Promotion Row */}
-                    <View style={styles.summaryRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                        <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Khuyến mãi:</Text>
-                        <TouchableOpacity
-                          onPress={() => (orderPromotion ? removeOrderPromotion() : setPromotionModalVisible(true))}
-                          style={{
-                            marginLeft: 8,
-                            backgroundColor: orderPromotion ? '#dc3545' : theme.colors.primary,
-                            paddingHorizontal: 8,
-                            paddingVertical: 4,
-                            borderRadius: 4,
-                          }}
-                        >
-                          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '500' }}>
-                            {orderPromotion ? '✕' : '+'}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                      <Text style={[styles.summaryValue, { color: orderPromotion ? '#28a745' : theme.colors.text }]}>
-                        {orderPromotion ? `-${formatCurrency(orderPromotion.amount)}` : '0đ'}
-                      </Text>
-                    </View>
+                    {renderPromotionRow()}
 
                     {/* Auto Print Toggle */}
-                    <View style={[styles.summaryRow, { marginBottom: 16 }]}>
-                      <Text style={[styles.summaryLabel, { color: theme.colors.text, flex: 1 }]}>Tự động in</Text>
-                      <Switch
-                        value={autoPrint}
-                        onValueChange={updateAutoPrint}
-                        trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                        thumbColor={autoPrint ? '#fff' : '#f4f3f4'}
-                        ios_backgroundColor={theme.colors.border}
-                      />
-                    </View>
+                    {renderAutoPrintToggle()}
 
                     {/* Order details when expanded */}
-                    <View style={styles.summaryRow}>
-                      <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
-                      <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-                        {formatCurrency(getOriginalTotal())}
-                      </Text>
-                    </View>
-
-                    {getTotalDiscount() > 0 && (
-                      <View style={styles.summaryRow}>
-                        <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm SP:</Text>
-                        <Text style={[styles.summaryValue, { color: '#28a745' }]}>
-                          -{formatCurrency(getTotalDiscount())}
-                        </Text>
-                      </View>
-                    )}
-
-                    {(orderDiscount?.amount || 0) + (orderPromotion?.amount || 0) > 0 && (
-                      <View style={styles.summaryRow}>
-                        <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng tiết kiệm:</Text>
-                        <Text style={[styles.summaryValue, { color: '#28a745' }]}>
-                          -
-                          {formatCurrency(
-                            getTotalDiscount() + (orderDiscount?.amount || 0) + (orderPromotion?.amount || 0),
-                          )}
-                        </Text>
-                      </View>
-                    )}
+                    {renderOrderSummaryDetails()}
                   </>
                 )}
 
@@ -1727,121 +1795,22 @@ export function Cashier() {
             {/* Payment Summary */}
             <View style={[styles.paymentSummary, { borderTopColor: theme.colors.border }]}>
               {/* Collapsible footer toggle */}
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('Landscape - Toggle footer clicked, current state:', footerCollapsed);
-                  setFooterCollapsed(!footerCollapsed);
-                }}
-                style={{
-                  alignSelf: 'center',
-                  paddingVertical: 8,
-                  paddingHorizontal: 16,
-                  marginBottom: 8,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={[{ color: theme.colors.text, marginRight: 4, fontSize: 12 }]}>
-                  {footerCollapsed ? 'Hiện chi tiết' : 'Ẩn chi tiết'}
-                </Text>
-                <Icon
-                  name={footerCollapsed ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                  size={20}
-                  color={theme.colors.text}
-                />
-              </TouchableOpacity>
+              {renderToggleFooterButton('Landscape')}
 
               {/* Collapsible section - Order Discount, Promotion, Auto Print */}
               {!footerCollapsed && (
                 <>
                   {/* Order Discount Row */}
-                  <View style={styles.summaryRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                      <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
-                      <TouchableOpacity
-                        onPress={() => (orderDiscount ? removeOrderDiscount() : setOrderDiscountModalVisible(true))}
-                        style={{
-                          marginLeft: 8,
-                          backgroundColor: orderDiscount ? '#dc3545' : theme.colors.primary,
-                          paddingHorizontal: 8,
-                          paddingVertical: 4,
-                          borderRadius: 4,
-                        }}
-                      >
-                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '500' }}>
-                          {orderDiscount ? '✕' : '+'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={[styles.summaryValue, { color: orderDiscount ? '#28a745' : theme.colors.text }]}>
-                      {orderDiscount ? `-${formatCurrency(orderDiscount.amount)}` : '0đ'}
-                    </Text>
-                  </View>
+                  {renderOrderDiscountRow()}
 
                   {/* Promotion Row */}
-                  <View style={styles.summaryRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                      <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Khuyến mãi:</Text>
-                      <TouchableOpacity
-                        onPress={() => (orderPromotion ? removeOrderPromotion() : setPromotionModalVisible(true))}
-                        style={{
-                          marginLeft: 8,
-                          backgroundColor: orderPromotion ? '#dc3545' : theme.colors.primary,
-                          paddingHorizontal: 8,
-                          paddingVertical: 4,
-                          borderRadius: 4,
-                        }}
-                      >
-                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '500' }}>
-                          {orderPromotion ? '✕' : '+'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={[styles.summaryValue, { color: orderPromotion ? '#28a745' : theme.colors.text }]}>
-                      {orderPromotion ? `-${formatCurrency(orderPromotion.amount)}` : '0đ'}
-                    </Text>
-                  </View>
+                  {renderPromotionRow()}
 
                   {/* Auto Print Toggle */}
-                  <View style={[styles.summaryRow, { marginBottom: 16 }]}>
-                    <Text style={[styles.summaryLabel, { color: theme.colors.text, flex: 1 }]}>Tự động in</Text>
-                    <Switch
-                      value={autoPrint}
-                      onValueChange={updateAutoPrint}
-                      trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                      thumbColor={autoPrint ? '#fff' : '#f4f3f4'}
-                      ios_backgroundColor={theme.colors.border}
-                    />
-                  </View>
+                  {renderAutoPrintToggle()}
 
                   {/* Order details when expanded */}
-                  <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
-                    <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-                      {formatCurrency(getOriginalTotal())}
-                    </Text>
-                  </View>
-
-                  {getTotalDiscount() > 0 && (
-                    <View style={styles.summaryRow}>
-                      <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm SP:</Text>
-                      <Text style={[styles.summaryValue, { color: '#28a745' }]}>
-                        -{formatCurrency(getTotalDiscount())}
-                      </Text>
-                    </View>
-                  )}
-
-                  {(orderDiscount?.amount || 0) + (orderPromotion?.amount || 0) > 0 && (
-                    <View style={styles.summaryRow}>
-                      <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng tiết kiệm:</Text>
-                      <Text style={[styles.summaryValue, { color: '#28a745' }]}>
-                        -
-                        {formatCurrency(
-                          getTotalDiscount() + (orderDiscount?.amount || 0) + (orderPromotion?.amount || 0),
-                        )}
-                      </Text>
-                    </View>
-                  )}
+                  {renderOrderSummaryDetails()}
                 </>
               )}
 
