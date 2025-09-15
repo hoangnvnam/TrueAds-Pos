@@ -19,40 +19,17 @@ import { toastError, toastSuccess, toastInfo, toastWarning } from '~/hooks/useTo
 import { Icon } from '~/components/Icon';
 import { useCashierSettings } from '~/hooks/useCashierSettings';
 import BottomSheetModal from '~/components/BottomSheetModal';
-
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  categories?: [];
-  stock_quantity: number | null;
-  stock_status: string | null;
-}
-
-interface CartItem extends Product {
-  quantity: number;
-  discountCode?: string;
-  discountPercent?: number;
-  discountAmount?: number;
-  finalPrice?: number;
-  manualDiscountType?: 'percentage' | 'fixed';
-  manualDiscountValue?: number;
-  isManualDiscount?: boolean;
-}
-
-interface OrderDiscount {
-  type: 'percentage' | 'fixed';
-  value: number;
-  amount: number;
-}
-
-interface Promotion {
-  code: string;
-  name: string;
-  type: 'percentage' | 'fixed';
-  value: number;
-  amount: number;
-}
+import { Image } from '~/components/Image';
+import { formatCurrency } from '~/utils/format';
+import {
+  Category,
+  ProcessedCategory,
+  ProductCategory,
+  Product,
+  CartItem,
+  OrderDiscount,
+  Promotion,
+} from '~/constants/interfaces';
 
 export function Cashier() {
   const theme = useTheme();
@@ -61,7 +38,7 @@ export function Cashier() {
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('Tất cả');
+  const [selectedCategory, setSelectedCategory] = useState<number | 'all'>('all');
   const [screenData, setScreenData] = useState(Dimensions.get('window'));
   const [discountModalVisible, setDiscountModalVisible] = useState(false);
   const [selectedItemForDiscount, setSelectedItemForDiscount] = useState<string | null>(null);
@@ -78,19 +55,16 @@ export function Cashier() {
   const [orderPromotion, setOrderPromotion] = useState<Promotion | null>(null);
   const [footerCollapsed, setFooterCollapsed] = useState(false);
 
-  // Modal states
   const [orderDiscountModalVisible, setOrderDiscountModalVisible] = useState(false);
   const [promotionModalVisible, setPromotionModalVisible] = useState(false);
   const [orderDiscountType, setOrderDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [orderDiscountValue, setOrderDiscountValue] = useState('');
   const [promotionCode, setPromotionCode] = useState('');
 
-  // Get current settings values
   const viewMode = settings.viewMode;
   const productViewMode = settings.productViewMode;
   const autoPrint = settings.autoPrint;
 
-  // Mock discount codes for demo
   const discountCodes = {
     SAVE10: { percent: 10, name: 'Giảm 10%' },
     SAVE20: { percent: 20, name: 'Giảm 20%' },
@@ -111,20 +85,43 @@ export function Cashier() {
     },
   });
 
-  const categories = ['Tất cả', 'Đồ uống', 'Thực phẩm', 'Snack'];
+  const { data: categories, refresh: refreshCategories } = useFetchData({
+    queryKey: ['categoriesData'],
+    url: '/get',
+    action: 'get_all_categories',
+    options: {
+      refetchOnWindowFocus: true,
+      refetchOnMount: true,
+      refetchOnReconnect: true,
+      refetchInterval: 1000 * 60 * 60 * 24,
+      staleTime: 1000 * 60 * 60 * 24,
+    },
+  });
 
-  // Listen to orientation changes with debounce
+  const processedCategories: ProcessedCategory[] = React.useMemo(() => {
+    if (!categories?.data) return [{ id: 'all', name: 'Tất cả' }];
+
+    const allCategory: ProcessedCategory = { id: 'all', name: 'Tất cả' };
+    const apiCategories: ProcessedCategory[] = categories.data.map((cat: Category) => ({
+      id: cat.id,
+      name: cat.name,
+      slug: cat.slug,
+      count: cat.count,
+      img_url: cat.img_url,
+    }));
+
+    return [allCategory, ...apiCategories];
+  }, [categories?.data]);
+
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
-      // Clear existing timeout
       if (orientationChangeTimeout) {
         clearTimeout(orientationChangeTimeout);
       }
 
-      // Set new timeout to debounce orientation changes
       const timeout = setTimeout(() => {
         setScreenData(window);
-      }, 150); // 150ms debounce
+      }, 150);
 
       setOrientationChangeTimeout(timeout);
     });
@@ -137,16 +134,25 @@ export function Cashier() {
     };
   }, [orientationChangeTimeout]);
 
-  // Check if device is in landscape mode with threshold to prevent flickering
-  const isLandscape = screenData.width > screenData.height + 50; // Add threshold to prevent edge case flickering
-  const isTablet = Math.min(screenData.width, screenData.height) >= 600; // Consider tablet if smaller dimension >= 600
+  const isLandscape = screenData.width > screenData.height + 50;
+  const isTablet = Math.min(screenData.width, screenData.height) >= 600;
 
   const filteredProducts = dataProducts?.data?.filter((product: any) => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'Tất cả' || product.category === selectedCategory;
+
+    let matchesCategory = true;
+    if (selectedCategory !== 'all') {
+      if (product.categories && Array.isArray(product.categories)) {
+        matchesCategory = product.categories.some((category: ProductCategory) => category.id === selectedCategory);
+      } else {
+        matchesCategory = false;
+      }
+    }
+
     return matchesSearch && matchesCategory;
   });
 
+  // Add product to cart or increase quantity if already exists
   const addToCart = (product: Product) => {
     setCart((prevCart) => {
       const existingItem = prevCart.find((item) => item.id === product.id);
@@ -166,6 +172,7 @@ export function Cashier() {
     });
   };
 
+  // Remove product from cart completely
   const removeFromCart = (productId: string) => {
     setCart((prevCart) => prevCart.filter((item) => item.id !== productId));
     const updatedQuantityInput = { ...quantityInput };
@@ -173,15 +180,15 @@ export function Cashier() {
     setQuantityInput(updatedQuantityInput);
   };
 
+  // Update quantity for a cart item
   const updateQuantity = (productId: string, quantity: number) => {
     if (quantity <= 0) {
       removeFromCart(productId);
       return;
     }
 
-    // Find the product to check stock
     const product = dataProducts?.data?.find((p: any) => p.id === productId);
-    const maxStock = product?.stock_quantity || 999; // Default to 999 if no stock limit
+    const maxStock = product?.stock_quantity || 999;
 
     if (quantity > maxStock) {
       toastWarning(`Số lượng không được vượt quá ${maxStock}`);
@@ -196,18 +203,19 @@ export function Cashier() {
       ),
     );
 
-    // Update the quantity input state to sync with the new quantity
     setQuantityInput((prev) => ({
       ...prev,
       [productId]: quantity.toString(),
     }));
   };
 
+  // Calculate final price after discount
   const calculateFinalPrice = (originalPrice: number, discountPercent?: number) => {
     if (!discountPercent) return originalPrice;
     return originalPrice * (1 - discountPercent / 100);
   };
 
+  // Apply discount to selected cart item
   const applyDiscount = () => {
     if (!selectedItemForDiscount) {
       Alert.alert('Thông báo', 'Vui lòng chọn sản phẩm');
@@ -247,7 +255,6 @@ export function Cashier() {
 
       Alert.alert('Thành công', `Đã áp dụng ${discount.name}`);
     } else {
-      // Manual discount
       const discountValue = parseFloat(manualDiscountValue);
       if (!discountValue || discountValue <= 0) {
         Alert.alert('Lỗi', 'Vui lòng nhập giá trị giảm giá hợp lệ');
@@ -271,7 +278,6 @@ export function Cashier() {
 
         discountAmount = cartItem.price - finalPrice;
       } else {
-        // Fixed amount
         if (discountValue > cartItem.price) {
           Alert.alert('Lỗi', 'Số tiền giảm không được > giá sản phẩm');
           return;
@@ -311,7 +317,7 @@ export function Cashier() {
     setDiscountType('coupon');
   };
 
-  // Apply order discount (for entire order)
+  // Apply discount to entire order
   const applyOrderDiscount = () => {
     const discountValue = parseFloat(orderDiscountValue);
     if (!discountValue || discountValue <= 0) {
@@ -319,7 +325,7 @@ export function Cashier() {
       return;
     }
 
-    const orderSubtotal = getOrderSubtotal(); // Get subtotal before any order-level discounts
+    const orderSubtotal = getOrderSubtotal();
 
     let discountAmount = 0;
 
@@ -330,7 +336,6 @@ export function Cashier() {
       }
       discountAmount = (orderSubtotal * discountValue) / 100;
     } else {
-      // Fixed amount
       if (discountValue > orderSubtotal) {
         Alert.alert('Lỗi', 'Số tiền giảm không được > tổng tiền hàng');
         return;
@@ -351,7 +356,7 @@ export function Cashier() {
     toastSuccess(`Đã áp dụng giảm giá ${discountTypeText}`);
   };
 
-  // Apply promotion
+  // Apply promotion code to order
   const applyPromotion = async () => {
     if (!promotionCode.trim()) {
       Alert.alert('Thông báo', 'Vui lòng nhập mã khuyến mãi');
@@ -359,10 +364,6 @@ export function Cashier() {
     }
 
     try {
-      // Mock API call - replace with actual API
-      // const response = await api.validatePromotion(promotionCode);
-
-      // Mock promotion data for demo
       const mockPromotions: { [key: string]: any } = {
         SUMMER2024: { name: 'Ưu đãi mùa hè', type: 'percentage', value: 15 },
         NEWUSER: { name: 'Khách hàng mới', type: 'fixed', value: 50000 },
@@ -417,7 +418,6 @@ export function Cashier() {
   const recalculateOrderDiscounts = () => {
     const subtotal = getOrderSubtotal();
 
-    // Recalculate order discount
     if (orderDiscount) {
       let newAmount = 0;
       if (orderDiscount.type === 'percentage') {
@@ -431,7 +431,6 @@ export function Cashier() {
       }
     }
 
-    // Recalculate promotion
     if (orderPromotion) {
       let newAmount = 0;
       if (orderPromotion.type === 'percentage') {
@@ -446,7 +445,6 @@ export function Cashier() {
     }
   };
 
-  // Use effect to recalculate when cart changes
   useEffect(() => {
     recalculateOrderDiscounts();
   }, [cart]);
@@ -481,40 +479,37 @@ export function Cashier() {
     setQuantityInput({ ...quantityInput, [productId]: quantity.toString() });
   };
 
+  // Get total amount including all discounts
   const getTotalAmount = () => {
     return cart.reduce((total, item) => {
-      // Nếu có finalPrice thì dùng finalPrice, nếu không thì tính giá * số lượng
       const itemPrice = item.finalPrice !== undefined ? item.finalPrice : item.price * item.quantity;
       return total + itemPrice;
     }, 0);
   };
 
+  // Get subtotal before order-level discounts
   const getOrderSubtotal = () => {
-    // Get subtotal before order-level discounts (but including item-level discounts)
     return cart.reduce((total, item) => {
       const itemPrice = item.finalPrice !== undefined ? item.finalPrice : item.price * item.quantity;
       return total + itemPrice;
     }, 0);
   };
 
+  // Get final total after all discounts and promotions
   const getFinalOrderTotal = () => {
     const subtotal = getOrderSubtotal();
     let total = subtotal;
 
-    // Apply order discount
     if (orderDiscount) {
       total -= orderDiscount.amount;
     }
 
-    // Apply promotion discount
     if (orderPromotion) {
       total -= orderPromotion.amount;
     }
 
-    // Ensure total is not negative
     const finalTotal = Math.max(total, 0);
 
-    // Show warning if total would be negative
     if (total < 0 && subtotal > 0) {
       console.warn('Total discount exceeds order subtotal');
     }
@@ -539,14 +534,6 @@ export function Cashier() {
     return cart.reduce((total, item) => total + item.quantity, 0);
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND',
-    }).format(amount);
-  };
-
-  // Reusable Components to reduce duplicate code
   const renderOrderDiscountRow = React.useCallback(
     () => (
       <View style={styles.summaryRow}>
@@ -708,7 +695,6 @@ export function Cashier() {
     ],
   );
 
-  // Render Discount Modal - can be used in both portrait and landscape
   const renderDiscountModal = React.useCallback(
     () => (
       <Modal
@@ -727,7 +713,6 @@ export function Cashier() {
           <View style={styles.modalContainer}>
             <Text style={styles.modalTitle}>Giảm giá sản phẩm</Text>
 
-            {/* Discount Type Toggle */}
             <View style={styles.discountTypeToggle}>
               <TouchableOpacity
                 onPress={() => setDiscountType('coupon')}
@@ -792,7 +777,6 @@ export function Cashier() {
                 </View>
               ) : (
                 <View>
-                  {/* Manual Discount Type */}
                   <View style={styles.manualDiscountSection}>
                     <Text style={styles.manualDiscountLabel}>Loại giảm giá:</Text>
                     <View style={styles.manualDiscountTypeRow}>
@@ -839,7 +823,6 @@ export function Cashier() {
                     </View>
                   </View>
 
-                  {/* Manual Discount Value Input */}
                   <View style={{ marginBottom: 16 }}>
                     <Text style={{ color: theme.colors.text, marginBottom: 8, fontSize: 16, fontWeight: '500' }}>
                       {manualDiscountType === 'percentage' ? 'Phần trăm giảm (%)' : 'Số tiền giảm (VND)'}:
@@ -962,7 +945,6 @@ export function Cashier() {
     ],
   );
 
-  // Render Order Discount Modal
   const renderOrderDiscountModal = React.useCallback(
     () => (
       <Modal
@@ -1125,7 +1107,6 @@ export function Cashier() {
     ],
   );
 
-  // Render Promotion Modal
   const renderPromotionModal = React.useCallback(
     () => (
       <Modal
@@ -1240,7 +1221,6 @@ export function Cashier() {
     ],
   );
 
-  // Render Cart BottomSheet - optimized for both portrait and landscape
   const renderCartBottomSheet = () => {
     const renderCartHeader = () => (
       <View style={styles.cartModalHeader}>
@@ -1316,6 +1296,7 @@ export function Cashier() {
     );
   };
 
+  // Process checkout and reset cart
   const handleCheckout = () => {
     const originalTotal = getOriginalTotal();
     const itemDiscountTotal = getTotalDiscount();
@@ -1363,6 +1344,7 @@ export function Cashier() {
 
   const renderProductItem = ({ item, detail = false }: { item: Product; detail?: boolean }) => (
     <TouchableOpacity style={[styles.productCard]} onPress={() => addToCart(item)}>
+      <Image source={item.img_url || ''} />
       <Text style={[styles.productName, { color: theme.colors.text }]}>{item.name}</Text>
       <Text style={[styles.productPrice, { color: theme.colors.primary }]}>{formatCurrency(item.price)}</Text>
       <Text style={[styles.productStock, { color: theme.colors.text }]}>
@@ -1374,6 +1356,7 @@ export function Cashier() {
   const renderProductItemList = ({ item }: { item: Product }) => (
     <TouchableOpacity style={[styles.productCardList]} onPress={() => addToCart(item)}>
       <View style={styles.productListContent}>
+        <Image source={item.img_url || item.images[0]?.src || ''} style={{ marginRight: 10 }} />
         <View style={styles.productListInfo}>
           <Text style={[styles.productNameList, { color: theme.colors.text }]}>{item.name}</Text>
           <Text style={[styles.productStockList, { color: theme.colors.text }]}>
@@ -1532,21 +1515,26 @@ export function Cashier() {
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryContainer}>
-            {categories.map((category) => (
+            {processedCategories.map((category) => (
               <TouchableOpacity
-                key={category}
+                key={category.id}
                 style={[
                   styles.categoryButton,
                   {
-                    backgroundColor: selectedCategory === category ? theme.colors.primary : theme.colors.cardBackground,
+                    backgroundColor:
+                      selectedCategory === category.id ? theme.colors.primary : theme.colors.cardBackground,
                   },
                 ]}
-                onPress={() => setSelectedCategory(category)}
+                onPress={() => setSelectedCategory(category.id)}
               >
                 <Text
-                  style={[styles.categoryText, { color: selectedCategory === category ? '#fff' : theme.colors.text }]}
+                  style={[
+                    styles.categoryText,
+                    { color: selectedCategory === category.id ? '#fff' : theme.colors.text },
+                  ]}
                 >
-                  {category}
+                  {category.name}
+                  {category.count !== undefined && category.id !== 'all' ? ` (${category.count})` : ''}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1578,7 +1566,7 @@ export function Cashier() {
               numColumns={productViewMode === 'grid' ? 2 : 1}
               key={productViewMode} // Force re-render when view mode changes
               scrollEnabled={false}
-              contentContainerStyle={productViewMode === 'grid' ? styles.productsGrid : styles.productsList}
+              contentContainerStyle={[productViewMode === 'grid' ? styles.productsGrid : styles.productsList]}
             />
           </View>
 
@@ -1717,22 +1705,30 @@ export function Cashier() {
           />
 
           {/* Category Filter */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryContainer}>
-            {categories.map((category) => (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={!isLandscape ? styles.categoryContainer : { ...styles.categoryContainer, paddingBottom: 30 }}
+          >
+            {processedCategories.map((category) => (
               <TouchableOpacity
-                key={category}
+                key={category.id}
                 style={[
                   styles.categoryButton,
                   {
-                    backgroundColor: selectedCategory === category ? theme.colors.primary : theme.colors.background,
+                    backgroundColor: selectedCategory === category.id ? theme.colors.primary : theme.colors.background,
                   },
                 ]}
-                onPress={() => setSelectedCategory(category)}
+                onPress={() => setSelectedCategory(category.id)}
               >
                 <Text
-                  style={[styles.categoryText, { color: selectedCategory === category ? '#fff' : theme.colors.text }]}
+                  style={[
+                    styles.categoryText,
+                    { color: selectedCategory === category.id ? '#fff' : theme.colors.text },
+                  ]}
                 >
-                  {category}
+                  {category.name}
+                  {category.count !== undefined && category.id !== 'all' ? ` (${category.count})` : ''}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1763,7 +1759,10 @@ export function Cashier() {
             keyExtractor={(item) => item.id}
             numColumns={productViewMode === 'grid' ? 2 : 1}
             key={productViewMode}
-            contentContainerStyle={productViewMode === 'grid' ? styles.productsGrid : styles.productsList}
+            contentContainerStyle={[
+              productViewMode === 'grid' ? styles.productsGrid : styles.productsList,
+              { paddingBottom: 150 },
+            ]}
             showsVerticalScrollIndicator={false}
           />
         </View>

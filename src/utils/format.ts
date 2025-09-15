@@ -1,5 +1,8 @@
-export const formatCurrency = (value: number | string): string => {
-  return parseInt(value.toString()).toLocaleString() + 'đ';
+export const formatCurrency = (value: number | any): string => {
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+  }).format(value);
 };
 
 export function formatTimeConver(dateTimeString: string): string {
