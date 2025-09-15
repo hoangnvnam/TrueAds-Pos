@@ -14,6 +14,7 @@ interface BottomSheetModalProps {
   data?: any[];
   renderItem?: ListRenderItem<any>;
   ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
+  ListEmptyComponent?: React.ComponentType<any> | React.ReactElement | null;
   numColumns?: number;
   keyExtractor?: (item: any, index: number) => string;
   contentContainerStyle?: any;
@@ -30,6 +31,7 @@ const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
   data,
   renderItem,
   ListHeaderComponent,
+  ListEmptyComponent,
   numColumns,
   keyExtractor,
   contentContainerStyle,
@@ -40,7 +42,7 @@ const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
   const bottomSheetRef = useRef<BottomSheet>(null);
   const theme = useTheme();
 
-  const snapPoints = useMemo(() => ['30%', '50%', '70%', '90%'], []);
+  const snapPoints = useMemo(() => ['30%', '50%', '70%', '90%', '100%'], []);
 
   const handleSheetChanges = useCallback(
     (index: number) => {
@@ -63,7 +65,7 @@ const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
     ),
     [],
   );
-  const ListEmptyComponent = () => {
+  const DefaultListEmptyComponent = () => {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <Text style={{ color: theme.colors.text }}>Không có dữ liệu</Text>
@@ -98,7 +100,7 @@ const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
             numColumns={numColumns}
             contentContainerStyle={[styles.listContainer, contentContainerStyle]}
             scrollEnabled={true}
-            ListEmptyComponent={ListEmptyComponent}
+            ListEmptyComponent={ListEmptyComponent || DefaultListEmptyComponent}
           />
         )}
         {renderFooter && renderFooter()}

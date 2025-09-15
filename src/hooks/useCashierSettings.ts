@@ -4,11 +4,13 @@ import { useStorage } from './useStorage';
 export interface CashierSettings {
   productViewMode: 'grid' | 'list';
   viewMode: 'split' | 'fullscreen';
+  autoPrint: boolean;
 }
 
 const DEFAULT_SETTINGS: CashierSettings = {
   productViewMode: 'grid',
   viewMode: 'split',
+  autoPrint: false,
 };
 
 export function useCashierSettings() {
@@ -58,6 +60,10 @@ export function useCashierSettings() {
     updateSettings({ viewMode: mode });
   };
 
+  const updateAutoPrint = (enabled: boolean) => {
+    updateSettings({ autoPrint: enabled });
+  };
+
   // Reset to default settings
   const resetSettings = async () => {
     try {
@@ -74,6 +80,7 @@ export function useCashierSettings() {
     updateSettings,
     updateProductViewMode,
     updateViewMode,
+    updateAutoPrint,
     resetSettings,
   };
 }

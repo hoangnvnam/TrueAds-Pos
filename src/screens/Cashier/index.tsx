@@ -5,6 +5,7 @@ import {
   FlatList,
   SafeAreaView,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -17,6 +18,7 @@ import { useCashierStyles } from './styles';
 import { toastError, toastSuccess, toastInfo, toastWarning } from '~/hooks/useToast';
 import { Icon } from '~/components/Icon';
 import { useCashierSettings } from '~/hooks/useCashierSettings';
+import BottomSheetModal from '~/components/BottomSheetModal';
 
 interface Product {
   id: string;
@@ -38,10 +40,24 @@ interface CartItem extends Product {
   isManualDiscount?: boolean;
 }
 
+interface OrderDiscount {
+  type: 'percentage' | 'fixed';
+  value: number;
+  amount: number;
+}
+
+interface Promotion {
+  code: string;
+  name: string;
+  type: 'percentage' | 'fixed';
+  value: number;
+  amount: number;
+}
+
 export function Cashier() {
   const theme = useTheme();
   const { styles } = useCashierStyles();
-  const { settings, isLoaded, updateProductViewMode, updateViewMode } = useCashierSettings();
+  const { settings, isLoaded, updateProductViewMode, updateViewMode, updateAutoPrint } = useCashierSettings();
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,12 +70,25 @@ export function Cashier() {
   const [discountType, setDiscountType] = useState<'coupon' | 'manual'>('manual');
   const [manualDiscountType, setManualDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [manualDiscountValue, setManualDiscountValue] = useState('');
-  const [cartModalVisible, setCartModalVisible] = useState(false);
+  const [cartBottomSheetVisible, setCartBottomSheetVisible] = useState(false);
   const [orientationChangeTimeout, setOrientationChangeTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // New states for order discount, promotion and footer collapsed
+  const [orderDiscount, setOrderDiscount] = useState<OrderDiscount | null>(null);
+  const [orderPromotion, setOrderPromotion] = useState<Promotion | null>(null);
+  const [footerCollapsed, setFooterCollapsed] = useState(false);
+
+  // Modal states
+  const [orderDiscountModalVisible, setOrderDiscountModalVisible] = useState(false);
+  const [promotionModalVisible, setPromotionModalVisible] = useState(false);
+  const [orderDiscountType, setOrderDiscountType] = useState<'percentage' | 'fixed'>('percentage');
+  const [orderDiscountValue, setOrderDiscountValue] = useState('');
+  const [promotionCode, setPromotionCode] = useState('');
 
   // Get current settings values
   const viewMode = settings.viewMode;
   const productViewMode = settings.productViewMode;
+  const autoPrint = settings.autoPrint;
 
   // Mock discount codes for demo
   const discountCodes = {
@@ -282,6 +311,146 @@ export function Cashier() {
     setDiscountType('coupon');
   };
 
+  // Apply order discount (for entire order)
+  const applyOrderDiscount = () => {
+    const discountValue = parseFloat(orderDiscountValue);
+    if (!discountValue || discountValue <= 0) {
+      Alert.alert('Lỗi', 'Vui lòng nhập giá trị giảm giá hợp lệ');
+      return;
+    }
+
+    const orderSubtotal = getOrderSubtotal(); // Get subtotal before any order-level discounts
+
+    let discountAmount = 0;
+
+    if (orderDiscountType === 'percentage') {
+      if (discountValue > 100) {
+        Alert.alert('Lỗi', 'Phần trăm giảm giá không được > 100%');
+        return;
+      }
+      discountAmount = (orderSubtotal * discountValue) / 100;
+    } else {
+      // Fixed amount
+      if (discountValue > orderSubtotal) {
+        Alert.alert('Lỗi', 'Số tiền giảm không được > tổng tiền hàng');
+        return;
+      }
+      discountAmount = discountValue;
+    }
+
+    setOrderDiscount({
+      type: orderDiscountType,
+      value: discountValue,
+      amount: discountAmount,
+    });
+
+    setOrderDiscountModalVisible(false);
+    setOrderDiscountValue('');
+
+    const discountTypeText = orderDiscountType === 'percentage' ? `${discountValue}%` : formatCurrency(discountValue);
+    toastSuccess(`Đã áp dụng giảm giá ${discountTypeText}`);
+  };
+
+  // Apply promotion
+  const applyPromotion = async () => {
+    if (!promotionCode.trim()) {
+      Alert.alert('Thông báo', 'Vui lòng nhập mã khuyến mãi');
+      return;
+    }
+
+    try {
+      // Mock API call - replace with actual API
+      // const response = await api.validatePromotion(promotionCode);
+
+      // Mock promotion data for demo
+      const mockPromotions: { [key: string]: any } = {
+        SUMMER2024: { name: 'Ưu đãi mùa hè', type: 'percentage', value: 15 },
+        NEWUSER: { name: 'Khách hàng mới', type: 'fixed', value: 50000 },
+        VIP100: { name: 'VIP 100K', type: 'fixed', value: 100000 },
+        PERCENT20: { name: 'Giảm 20%', type: 'percentage', value: 20 },
+      };
+
+      const promotionData = mockPromotions[promotionCode.toUpperCase()];
+
+      if (!promotionData) {
+        Alert.alert('Lỗi', 'Mã khuyến mãi không hợp lệ hoặc đã hết hạn');
+        return;
+      }
+
+      const orderSubtotal = getOrderSubtotal();
+      let promotionAmount = 0;
+
+      if (promotionData.type === 'percentage') {
+        promotionAmount = (orderSubtotal * promotionData.value) / 100;
+      } else {
+        promotionAmount = Math.min(promotionData.value, orderSubtotal);
+      }
+
+      setOrderPromotion({
+        code: promotionCode.toUpperCase(),
+        name: promotionData.name,
+        type: promotionData.type,
+        value: promotionData.value,
+        amount: promotionAmount,
+      });
+
+      setPromotionModalVisible(false);
+      setPromotionCode('');
+
+      toastSuccess(`Đã áp dụng khuyến mãi: ${promotionData.name}`);
+    } catch (error) {
+      Alert.alert('Lỗi', 'Không thể xác thực mã khuyến mãi. Vui lòng thử lại.');
+    }
+  };
+
+  const removeOrderDiscount = () => {
+    setOrderDiscount(null);
+    toastInfo('Đã bỏ giảm giá');
+  };
+
+  const removeOrderPromotion = () => {
+    setOrderPromotion(null);
+    toastInfo('Đã bỏ khuyến mãi');
+  };
+
+  // Recalculate order-level discounts when cart changes
+  const recalculateOrderDiscounts = () => {
+    const subtotal = getOrderSubtotal();
+
+    // Recalculate order discount
+    if (orderDiscount) {
+      let newAmount = 0;
+      if (orderDiscount.type === 'percentage') {
+        newAmount = (subtotal * orderDiscount.value) / 100;
+      } else {
+        newAmount = Math.min(orderDiscount.value, subtotal);
+      }
+
+      if (newAmount !== orderDiscount.amount) {
+        setOrderDiscount((prev) => (prev ? { ...prev, amount: newAmount } : null));
+      }
+    }
+
+    // Recalculate promotion
+    if (orderPromotion) {
+      let newAmount = 0;
+      if (orderPromotion.type === 'percentage') {
+        newAmount = (subtotal * orderPromotion.value) / 100;
+      } else {
+        newAmount = Math.min(orderPromotion.value, subtotal);
+      }
+
+      if (newAmount !== orderPromotion.amount) {
+        setOrderPromotion((prev) => (prev ? { ...prev, amount: newAmount } : null));
+      }
+    }
+  };
+
+  // Use effect to recalculate when cart changes
+  useEffect(() => {
+    recalculateOrderDiscounts();
+  }, [cart]);
+
   const removeDiscount = (productId: string) => {
     setCart((prevCart) =>
       prevCart.map((item) =>
@@ -318,6 +487,39 @@ export function Cashier() {
       const itemPrice = item.finalPrice !== undefined ? item.finalPrice : item.price * item.quantity;
       return total + itemPrice;
     }, 0);
+  };
+
+  const getOrderSubtotal = () => {
+    // Get subtotal before order-level discounts (but including item-level discounts)
+    return cart.reduce((total, item) => {
+      const itemPrice = item.finalPrice !== undefined ? item.finalPrice : item.price * item.quantity;
+      return total + itemPrice;
+    }, 0);
+  };
+
+  const getFinalOrderTotal = () => {
+    const subtotal = getOrderSubtotal();
+    let total = subtotal;
+
+    // Apply order discount
+    if (orderDiscount) {
+      total -= orderDiscount.amount;
+    }
+
+    // Apply promotion discount
+    if (orderPromotion) {
+      total -= orderPromotion.amount;
+    }
+
+    // Ensure total is not negative
+    const finalTotal = Math.max(total, 0);
+
+    // Show warning if total would be negative
+    if (total < 0 && subtotal > 0) {
+      console.warn('Total discount exceeds order subtotal');
+    }
+
+    return finalTotal;
   };
 
   const getTotalDiscount = () => {
@@ -552,80 +754,134 @@ export function Cashier() {
     </Modal>
   );
 
-  // Render Cart Modal - optimized for both portrait and landscape
-  const renderCartModal = () => (
+  // Render Order Discount Modal
+  const renderOrderDiscountModal = () => (
     <Modal
-      visible={cartModalVisible}
+      visible={orderDiscountModalVisible}
       transparent={true}
       animationType="fade"
-      onRequestClose={() => setCartModalVisible(false)}
-      supportedOrientations={['portrait', 'landscape']}
+      onRequestClose={() => {
+        setOrderDiscountModalVisible(false);
+        setOrderDiscountValue('');
+        setOrderDiscountType('percentage');
+      }}
     >
-      <View style={styles.cartModalOverlay}>
-        <TouchableOpacity
-          style={styles.cartModalBackdrop}
-          activeOpacity={1}
-          onPress={() => setCartModalVisible(false)}
-        />
-        <View style={[styles.cartModalContainer]}>
-          <View style={styles.cartModalHeader}>
-            <Text style={[styles.cartModalTitle, { color: theme.colors.text }]}>Giỏ hàng</Text>
-            <TouchableOpacity onPress={() => setCartModalVisible(false)}>
-              <Icon name="close" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-          </View>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
+          <Text style={styles.modalTitle}>Giảm giá tổng đơn</Text>
 
-          {cart.length === 0 ? (
-            <View style={styles.emptyCartContainer}>
-              <Text style={styles.emptyCartText}>Giỏ hàng trống{'\n'}Vui lòng thêm sản phẩm</Text>
+          <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollView}>
+            {/* Order Discount Type */}
+            <View style={styles.manualDiscountSection}>
+              <Text style={styles.manualDiscountLabel}>Loại giảm giá:</Text>
+              <View style={styles.manualDiscountTypeRow}>
+                <TouchableOpacity
+                  onPress={() => setOrderDiscountType('percentage')}
+                  style={[
+                    styles.manualDiscountTypeButton,
+                    orderDiscountType === 'percentage'
+                      ? styles.manualDiscountTypeButtonActive
+                      : styles.manualDiscountTypeButtonInactive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.manualDiscountTypeText,
+                      orderDiscountType === 'percentage'
+                        ? styles.manualDiscountTypeTextActive
+                        : styles.manualDiscountTypeTextInactive,
+                    ]}
+                  >
+                    Phần trăm (%)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setOrderDiscountType('fixed')}
+                  style={[
+                    styles.manualDiscountTypeButton,
+                    orderDiscountType === 'fixed'
+                      ? styles.manualDiscountTypeButtonActive
+                      : styles.manualDiscountTypeButtonInactive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.manualDiscountTypeText,
+                      orderDiscountType === 'fixed'
+                        ? styles.manualDiscountTypeTextActive
+                        : styles.manualDiscountTypeTextInactive,
+                    ]}
+                  >
+                    Số tiền cố định
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          ) : (
-            <FlatList
-              data={cart}
-              renderItem={renderCartItem}
-              keyExtractor={(item) => item.id}
-              style={styles.cartModalList}
-              showsVerticalScrollIndicator={false}
-            />
-          )}
 
-          {/* Payment Summary */}
-          <View style={[styles.cartModalPayment, { borderTopColor: theme.colors.border }]}>
-            {getTotalDiscount() > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
-                <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-                  {formatCurrency(getOriginalTotal())}
-                </Text>
-              </View>
-            )}
-
-            {getTotalDiscount() > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
-                <Text style={[styles.summaryValue, { color: '#28a745' }]}>-{formatCurrency(getTotalDiscount())}</Text>
-              </View>
-            )}
-
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>Thành tiền:</Text>
-              <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
-                {formatCurrency(getTotalAmount())}
+            {/* Order Discount Value Input */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ color: theme.colors.text, marginBottom: 8, fontSize: 16, fontWeight: '500' }}>
+                {orderDiscountType === 'percentage' ? 'Phần trăm giảm (%)' : 'Số tiền giảm (VND)'}:
               </Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  fontSize: 16,
+                  color: theme.colors.text,
+                  backgroundColor: theme.colors.background,
+                }}
+                placeholder={orderDiscountType === 'percentage' ? 'Nhập % giảm (vd: 15)' : 'Nhập số tiền (vd: 50000)'}
+                placeholderTextColor={theme.colors.text}
+                value={orderDiscountValue}
+                onChangeText={setOrderDiscountValue}
+                keyboardType="numeric"
+              />
+              {orderDiscountType === 'percentage' && (
+                <Text style={{ color: theme.colors.text, fontSize: 12, marginTop: 4 }}>
+                  Lưu ý: Phần trăm phải nhỏ hơn hoặc bằng 100%
+                </Text>
+              )}
+              {orderDiscountType === 'fixed' && (
+                <Text style={{ color: theme.colors.text, fontSize: 12, marginTop: 4 }}>
+                  Lưu ý: Số tiền phải nhỏ hơn hoặc bằng tổng tiền hàng ({formatCurrency(getOrderSubtotal())})
+                </Text>
+              )}
             </View>
+          </ScrollView>
+
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+            <TouchableOpacity
+              onPress={() => {
+                setOrderDiscountModalVisible(false);
+                setOrderDiscountValue('');
+                setOrderDiscountType('percentage');
+              }}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: theme.colors.border,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: theme.colors.text, fontWeight: '500' }}>Hủy</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
-              style={[
-                styles.checkoutButton,
-                { backgroundColor: theme.colors.primary, opacity: cart.length === 0 ? 0.6 : 1 },
-              ]}
-              onPress={() => {
-                handleCheckout();
-                setCartModalVisible(false);
+              onPress={applyOrderDiscount}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: theme.colors.primary,
+                alignItems: 'center',
               }}
-              disabled={cart.length === 0}
             >
-              <Text style={styles.checkoutButtonText}>Thanh toán</Text>
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Áp dụng</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -633,21 +889,309 @@ export function Cashier() {
     </Modal>
   );
 
+  // Render Promotion Modal
+  const renderPromotionModal = () => (
+    <Modal
+      visible={promotionModalVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => {
+        setPromotionModalVisible(false);
+        setPromotionCode('');
+      }}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
+          <Text style={styles.modalTitle}>Mã khuyến mãi</Text>
+
+          <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollView}>
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ color: theme.colors.text, marginBottom: 8, fontSize: 16, fontWeight: '500' }}>
+                Mã khuyến mãi:
+              </Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  fontSize: 16,
+                  color: theme.colors.text,
+                  backgroundColor: theme.colors.background,
+                }}
+                placeholder="Nhập mã khuyến mãi..."
+                placeholderTextColor={theme.colors.text}
+                value={promotionCode}
+                onChangeText={setPromotionCode}
+                autoCapitalize="characters"
+              />
+            </View>
+
+            <View style={styles.couponListContainer}>
+              <Text style={styles.couponListTitle}>Mã khuyến mãi có sẵn:</Text>
+              {[
+                { code: 'SUMMER2024', name: 'Ưu đãi mùa hè - Giảm 15%' },
+                { code: 'NEWUSER', name: 'Khách hàng mới - Giảm 50K' },
+                { code: 'VIP100', name: 'VIP - Giảm 100K' },
+                { code: 'PERCENT20', name: 'Giảm 20%' },
+              ].map((promo) => (
+                <TouchableOpacity
+                  key={promo.code}
+                  onPress={() => setPromotionCode(promo.code)}
+                  style={[
+                    styles.couponItem,
+                    promotionCode === promo.code ? styles.couponItemActive : styles.couponItemInactive,
+                  ]}
+                >
+                  <Text style={styles.couponCode}>{promo.code}</Text>
+                  <Text style={styles.couponName}>{promo.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+            <TouchableOpacity
+              onPress={() => {
+                setPromotionModalVisible(false);
+                setPromotionCode('');
+              }}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: theme.colors.border,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: theme.colors.text, fontWeight: '500' }}>Hủy</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={applyPromotion}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: theme.colors.primary,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Áp dụng</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Render Cart BottomSheet - optimized for both portrait and landscape
+  const renderCartBottomSheet = () => {
+    const renderCartHeader = () => (
+      <View style={styles.cartModalHeader}>
+        <Text style={[styles.cartModalTitle, { color: theme.colors.text }]}>Giỏ hàng</Text>
+      </View>
+    );
+
+    const renderCartFooter = () => (
+      <View style={[styles.cartModalPayment, { borderTopColor: theme.colors.border }]}>
+        {/* Collapsible footer toggle */}
+        <TouchableOpacity
+          onPress={() => setFooterCollapsed(!footerCollapsed)}
+          style={{
+            alignSelf: 'center',
+            paddingVertical: 8,
+            paddingHorizontal: 16,
+            marginBottom: 8,
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}
+        >
+          <Text style={[{ color: theme.colors.text, marginRight: 4, fontSize: 12 }]}>
+            {footerCollapsed ? 'Hiện chi tiết' : 'Ẩn chi tiết'}
+          </Text>
+          <Icon
+            name={footerCollapsed ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+            size={20}
+            color={theme.colors.text}
+          />
+        </TouchableOpacity>
+
+        {/* Collapsible section - Order Discount, Promotion, Auto Print */}
+        {!footerCollapsed && (
+          <>
+            {/* Order Discount Row */}
+            <View style={styles.summaryRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
+                <TouchableOpacity
+                  onPress={() => (orderDiscount ? removeOrderDiscount() : setOrderDiscountModalVisible(true))}
+                  style={{
+                    marginLeft: 8,
+                    backgroundColor: orderDiscount ? '#dc3545' : theme.colors.primary,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 4,
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '500' }}>{orderDiscount ? '✕' : '+'}</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={[styles.summaryValue, { color: orderDiscount ? '#28a745' : theme.colors.text }]}>
+                {orderDiscount ? `-${formatCurrency(orderDiscount.amount)}` : '0đ'}
+              </Text>
+            </View>
+
+            {/* Promotion Row */}
+            <View style={styles.summaryRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Khuyến mãi:</Text>
+                <TouchableOpacity
+                  onPress={() => (orderPromotion ? removeOrderPromotion() : setPromotionModalVisible(true))}
+                  style={{
+                    marginLeft: 8,
+                    backgroundColor: orderPromotion ? '#dc3545' : theme.colors.primary,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 4,
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '500' }}>{orderPromotion ? '✕' : '+'}</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={[styles.summaryValue, { color: orderPromotion ? '#28a745' : theme.colors.text }]}>
+                {orderPromotion ? `-${formatCurrency(orderPromotion.amount)}` : '0đ'}
+              </Text>
+            </View>
+
+            {/* Auto Print Toggle */}
+            <View style={[styles.summaryRow, { marginBottom: 16 }]}>
+              <Text style={[styles.summaryLabel, { color: theme.colors.text, flex: 1 }]}>Tự động in</Text>
+              <Switch
+                value={autoPrint}
+                onValueChange={updateAutoPrint}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                thumbColor={autoPrint ? '#fff' : '#f4f3f4'}
+                ios_backgroundColor={theme.colors.border}
+              />
+            </View>
+
+            {/* Order details when expanded */}
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
+              <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
+                {formatCurrency(getOriginalTotal())}
+              </Text>
+            </View>
+
+            {getTotalDiscount() > 0 && (
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm SP:</Text>
+                <Text style={[styles.summaryValue, { color: '#28a745' }]}>-{formatCurrency(getTotalDiscount())}</Text>
+              </View>
+            )}
+
+            {(orderDiscount?.amount || 0) + (orderPromotion?.amount || 0) > 0 && (
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng tiết kiệm:</Text>
+                <Text style={[styles.summaryValue, { color: '#28a745' }]}>
+                  -{formatCurrency(getTotalDiscount() + (orderDiscount?.amount || 0) + (orderPromotion?.amount || 0))}
+                </Text>
+              </View>
+            )}
+          </>
+        )}
+
+        {/* Total and Checkout Button - always visible */}
+        <View style={styles.summaryRow}>
+          <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>Thành tiền:</Text>
+          <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
+            {formatCurrency(getFinalOrderTotal())}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.checkoutButton,
+            { backgroundColor: theme.colors.primary, opacity: cart.length === 0 ? 0.6 : 1 },
+          ]}
+          onPress={() => {
+            handleCheckout();
+            setCartBottomSheetVisible(false);
+          }}
+          disabled={cart.length === 0}
+        >
+          <Text style={styles.checkoutButtonText}>Thanh toán</Text>
+        </TouchableOpacity>
+      </View>
+    );
+
+    const renderEmptyCart = () => (
+      <View style={styles.emptyCartContainer}>
+        <Text style={styles.emptyCartText}>Giỏ hàng trống{'\n'}Vui lòng thêm sản phẩm</Text>
+      </View>
+    );
+
+    return (
+      <BottomSheetModal
+        isVisible={cartBottomSheetVisible}
+        onClose={() => setCartBottomSheetVisible(false)}
+        componentView="BottomSheetFlatList"
+        data={cart}
+        renderItem={renderCartItem}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={renderCartHeader}
+        ListEmptyComponent={renderEmptyCart}
+        renderFooter={renderCartFooter}
+        firstPointIndex={4}
+      />
+    );
+  };
+
   const handleCheckout = () => {
     const originalTotal = getOriginalTotal();
-    const discountTotal = getTotalDiscount();
-    const finalTotal = getTotalAmount();
+    const itemDiscountTotal = getTotalDiscount();
+    const orderDiscountAmount = orderDiscount?.amount || 0;
+    const promotionAmount = orderPromotion?.amount || 0;
+    const finalTotal = getFinalOrderTotal();
 
     let message = `Thanh toán thành công!\n\nTổng hóa đơn: ${formatCurrency(finalTotal)}`;
 
-    if (discountTotal > 0) {
+    if (itemDiscountTotal > 0 || orderDiscountAmount > 0 || promotionAmount > 0) {
       message += `\nTổng gốc: ${formatCurrency(originalTotal)}`;
-      message += `\nTiết kiệm: ${formatCurrency(discountTotal)}`;
+
+      if (itemDiscountTotal > 0) {
+        message += `\nGiảm giá sản phẩm: ${formatCurrency(itemDiscountTotal)}`;
+      }
+
+      if (orderDiscountAmount > 0) {
+        const discountText =
+          orderDiscount?.type === 'percentage' ? `${orderDiscount.value}%` : formatCurrency(orderDiscount?.value || 0);
+        message += `\nGiảm giá đơn hàng (${discountText}): ${formatCurrency(orderDiscountAmount)}`;
+      }
+
+      if (promotionAmount > 0) {
+        message += `\nKhuyến mãi (${orderPromotion?.code}): ${formatCurrency(promotionAmount)}`;
+      }
+
+      const totalSavings = itemDiscountTotal + orderDiscountAmount + promotionAmount;
+      message += `\nTổng tiết kiệm: ${formatCurrency(totalSavings)}`;
+    }
+
+    if (autoPrint) {
+      message += '\n\n🖨️ Đang in hóa đơn...';
+      // Here you would integrate with your printing service
     }
 
     toastSuccess(message);
+
+    // Reset everything
     setCart([]);
     setQuantityInput({});
+    setOrderDiscount(null);
+    setOrderPromotion(null);
+    setFooterCollapsed(false);
   };
 
   const renderProductItem = ({ item, detail = false }: { item: Product; detail?: boolean }) => (
@@ -770,20 +1314,22 @@ export function Cashier() {
         {viewMode === 'fullscreen' && (
           <>
             {/* Floating Cart Button */}
-            <TouchableOpacity
-              style={[styles.floatingCartButton, { backgroundColor: theme.colors.primary }]}
-              onPress={() => setCartModalVisible(true)}
-            >
-              <Icon name="shopping-basket" size={24} color="#fff" />
-              {cart.length > 0 && (
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            {!cartBottomSheetVisible && (
+              <TouchableOpacity
+                style={[styles.floatingCartButton, { backgroundColor: theme.colors.primary }]}
+                onPress={() => setCartBottomSheetVisible(true)}
+              >
+                <Icon name="shopping-basket" size={24} color="#fff" />
+                {cart.length > 0 && (
+                  <View style={styles.cartBadge}>
+                    <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
 
-            {/* Cart Modal */}
-            {renderCartModal()}
+            {/* Cart BottomSheet */}
+            {renderCartBottomSheet()}
           </>
         )}
 
@@ -889,30 +1435,132 @@ export function Cashier() {
               />
 
               <View style={[styles.portraitCheckout, { borderTopColor: theme.colors.border }]}>
-                {getTotalDiscount() > 0 && (
-                  <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
-                    <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-                      {formatCurrency(getOriginalTotal())}
-                    </Text>
-                  </View>
+                {/* Collapsible footer toggle */}
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log('Portrait - Toggle footer clicked, current state:', footerCollapsed);
+                    setFooterCollapsed(!footerCollapsed);
+                  }}
+                  style={{
+                    alignSelf: 'center',
+                    paddingVertical: 8,
+                    paddingHorizontal: 16,
+                    marginBottom: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={[{ color: theme.colors.text, marginRight: 4, fontSize: 12 }]}>
+                    {footerCollapsed ? 'Hiện chi tiết' : 'Ẩn chi tiết'}
+                  </Text>
+                  <Icon
+                    name={footerCollapsed ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                    size={20}
+                    color={theme.colors.text}
+                  />
+                </TouchableOpacity>
+
+                {/* Collapsible section - Order Discount, Promotion, Auto Print */}
+                {!footerCollapsed && (
+                  <>
+                    {/* Order Discount Row */}
+                    <View style={styles.summaryRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                        <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
+                        <TouchableOpacity
+                          onPress={() => (orderDiscount ? removeOrderDiscount() : setOrderDiscountModalVisible(true))}
+                          style={{
+                            marginLeft: 8,
+                            backgroundColor: orderDiscount ? '#dc3545' : theme.colors.primary,
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 4,
+                          }}
+                        >
+                          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '500' }}>
+                            {orderDiscount ? '✕' : '+'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={[styles.summaryValue, { color: orderDiscount ? '#28a745' : theme.colors.text }]}>
+                        {orderDiscount ? `-${formatCurrency(orderDiscount.amount)}` : '0đ'}
+                      </Text>
+                    </View>
+
+                    {/* Promotion Row */}
+                    <View style={styles.summaryRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                        <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Khuyến mãi:</Text>
+                        <TouchableOpacity
+                          onPress={() => (orderPromotion ? removeOrderPromotion() : setPromotionModalVisible(true))}
+                          style={{
+                            marginLeft: 8,
+                            backgroundColor: orderPromotion ? '#dc3545' : theme.colors.primary,
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 4,
+                          }}
+                        >
+                          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '500' }}>
+                            {orderPromotion ? '✕' : '+'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={[styles.summaryValue, { color: orderPromotion ? '#28a745' : theme.colors.text }]}>
+                        {orderPromotion ? `-${formatCurrency(orderPromotion.amount)}` : '0đ'}
+                      </Text>
+                    </View>
+
+                    {/* Auto Print Toggle */}
+                    <View style={[styles.summaryRow, { marginBottom: 16 }]}>
+                      <Text style={[styles.summaryLabel, { color: theme.colors.text, flex: 1 }]}>Tự động in</Text>
+                      <Switch
+                        value={autoPrint}
+                        onValueChange={updateAutoPrint}
+                        trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                        thumbColor={autoPrint ? '#fff' : '#f4f3f4'}
+                        ios_backgroundColor={theme.colors.border}
+                      />
+                    </View>
+
+                    {/* Order details when expanded */}
+                    <View style={styles.summaryRow}>
+                      <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
+                      <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
+                        {formatCurrency(getOriginalTotal())}
+                      </Text>
+                    </View>
+
+                    {getTotalDiscount() > 0 && (
+                      <View style={styles.summaryRow}>
+                        <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm SP:</Text>
+                        <Text style={[styles.summaryValue, { color: '#28a745' }]}>
+                          -{formatCurrency(getTotalDiscount())}
+                        </Text>
+                      </View>
+                    )}
+
+                    {(orderDiscount?.amount || 0) + (orderPromotion?.amount || 0) > 0 && (
+                      <View style={styles.summaryRow}>
+                        <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng tiết kiệm:</Text>
+                        <Text style={[styles.summaryValue, { color: '#28a745' }]}>
+                          -
+                          {formatCurrency(
+                            getTotalDiscount() + (orderDiscount?.amount || 0) + (orderPromotion?.amount || 0),
+                          )}
+                        </Text>
+                      </View>
+                    )}
+                  </>
                 )}
 
-                {getTotalDiscount() > 0 && (
-                  <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
-                    <Text style={[styles.summaryValue, { color: '#28a745' }]}>
-                      -{formatCurrency(getTotalDiscount())}
-                    </Text>
-                  </View>
-                )}
-
+                {/* Total and Checkout Button - always visible */}
                 <View style={styles.summaryRow}>
                   <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>
                     Thành tiền:
                   </Text>
                   <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
-                    {formatCurrency(getTotalAmount())}
+                    {formatCurrency(getFinalOrderTotal())}
                   </Text>
                 </View>
 
@@ -929,6 +1577,12 @@ export function Cashier() {
 
         {/* Discount Modal for Portrait */}
         {renderDiscountModal()}
+
+        {/* Order Discount Modal */}
+        {renderOrderDiscountModal()}
+
+        {/* Promotion Modal */}
+        {renderPromotionModal()}
       </SafeAreaView>
     );
   }
@@ -949,20 +1603,22 @@ export function Cashier() {
       {/* Floating Cart Button for fullscreen mode */}
       {viewMode === 'fullscreen' && (
         <>
-          <TouchableOpacity
-            style={[styles.floatingCartButton, { backgroundColor: theme.colors.primary }]}
-            onPress={() => setCartModalVisible(true)}
-          >
-            <Icon name="shopping-basket" size={24} color="#fff" />
-            {cart.length > 0 && (
-              <View style={styles.cartBadge}>
-                <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          {!cartBottomSheetVisible && (
+            <TouchableOpacity
+              style={[styles.floatingCartButton, { backgroundColor: theme.colors.primary }]}
+              onPress={() => setCartBottomSheetVisible(true)}
+            >
+              <Icon name="shopping-basket" size={24} color="#fff" />
+              {cart.length > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
 
-          {/* Cart Modal for fullscreen mode */}
-          {renderCartModal()}
+          {/* Cart BottomSheet for fullscreen mode */}
+          {renderCartBottomSheet()}
         </>
       )}
 
@@ -1070,26 +1726,130 @@ export function Cashier() {
 
             {/* Payment Summary */}
             <View style={[styles.paymentSummary, { borderTopColor: theme.colors.border }]}>
-              {getTotalDiscount() > 0 && (
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
-                  <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-                    {formatCurrency(getOriginalTotal())}
-                  </Text>
-                </View>
+              {/* Collapsible footer toggle */}
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('Landscape - Toggle footer clicked, current state:', footerCollapsed);
+                  setFooterCollapsed(!footerCollapsed);
+                }}
+                style={{
+                  alignSelf: 'center',
+                  paddingVertical: 8,
+                  paddingHorizontal: 16,
+                  marginBottom: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={[{ color: theme.colors.text, marginRight: 4, fontSize: 12 }]}>
+                  {footerCollapsed ? 'Hiện chi tiết' : 'Ẩn chi tiết'}
+                </Text>
+                <Icon
+                  name={footerCollapsed ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                  size={20}
+                  color={theme.colors.text}
+                />
+              </TouchableOpacity>
+
+              {/* Collapsible section - Order Discount, Promotion, Auto Print */}
+              {!footerCollapsed && (
+                <>
+                  {/* Order Discount Row */}
+                  <View style={styles.summaryRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                      <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
+                      <TouchableOpacity
+                        onPress={() => (orderDiscount ? removeOrderDiscount() : setOrderDiscountModalVisible(true))}
+                        style={{
+                          marginLeft: 8,
+                          backgroundColor: orderDiscount ? '#dc3545' : theme.colors.primary,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 4,
+                        }}
+                      >
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '500' }}>
+                          {orderDiscount ? '✕' : '+'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={[styles.summaryValue, { color: orderDiscount ? '#28a745' : theme.colors.text }]}>
+                      {orderDiscount ? `-${formatCurrency(orderDiscount.amount)}` : '0đ'}
+                    </Text>
+                  </View>
+
+                  {/* Promotion Row */}
+                  <View style={styles.summaryRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                      <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Khuyến mãi:</Text>
+                      <TouchableOpacity
+                        onPress={() => (orderPromotion ? removeOrderPromotion() : setPromotionModalVisible(true))}
+                        style={{
+                          marginLeft: 8,
+                          backgroundColor: orderPromotion ? '#dc3545' : theme.colors.primary,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 4,
+                        }}
+                      >
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '500' }}>
+                          {orderPromotion ? '✕' : '+'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={[styles.summaryValue, { color: orderPromotion ? '#28a745' : theme.colors.text }]}>
+                      {orderPromotion ? `-${formatCurrency(orderPromotion.amount)}` : '0đ'}
+                    </Text>
+                  </View>
+
+                  {/* Auto Print Toggle */}
+                  <View style={[styles.summaryRow, { marginBottom: 16 }]}>
+                    <Text style={[styles.summaryLabel, { color: theme.colors.text, flex: 1 }]}>Tự động in</Text>
+                    <Switch
+                      value={autoPrint}
+                      onValueChange={updateAutoPrint}
+                      trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                      thumbColor={autoPrint ? '#fff' : '#f4f3f4'}
+                      ios_backgroundColor={theme.colors.border}
+                    />
+                  </View>
+
+                  {/* Order details when expanded */}
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
+                    <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
+                      {formatCurrency(getOriginalTotal())}
+                    </Text>
+                  </View>
+
+                  {getTotalDiscount() > 0 && (
+                    <View style={styles.summaryRow}>
+                      <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm SP:</Text>
+                      <Text style={[styles.summaryValue, { color: '#28a745' }]}>
+                        -{formatCurrency(getTotalDiscount())}
+                      </Text>
+                    </View>
+                  )}
+
+                  {(orderDiscount?.amount || 0) + (orderPromotion?.amount || 0) > 0 && (
+                    <View style={styles.summaryRow}>
+                      <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng tiết kiệm:</Text>
+                      <Text style={[styles.summaryValue, { color: '#28a745' }]}>
+                        -
+                        {formatCurrency(
+                          getTotalDiscount() + (orderDiscount?.amount || 0) + (orderPromotion?.amount || 0),
+                        )}
+                      </Text>
+                    </View>
+                  )}
+                </>
               )}
 
-              {getTotalDiscount() > 0 && (
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
-                  <Text style={[styles.summaryValue, { color: '#28a745' }]}>-{formatCurrency(getTotalDiscount())}</Text>
-                </View>
-              )}
-
+              {/* Total and Checkout Button - always visible */}
               <View style={styles.summaryRow}>
                 <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>Thành tiền:</Text>
                 <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
-                  {formatCurrency(getTotalAmount())}
+                  {formatCurrency(getFinalOrderTotal())}
                 </Text>
               </View>
 
@@ -1111,6 +1871,12 @@ export function Cashier() {
       {/* Discount Modal */}
       {/* Discount Modal for Landscape */}
       {renderDiscountModal()}
+
+      {/* Order Discount Modal */}
+      {renderOrderDiscountModal()}
+
+      {/* Promotion Modal */}
+      {renderPromotionModal()}
     </SafeAreaView>
   );
 }
