@@ -16,6 +16,7 @@ import { useTheme } from '~/hooks/useTheme';
 import { useCashierStyles } from './styles';
 import { toastError, toastSuccess, toastInfo, toastWarning } from '~/hooks/useToast';
 import { Icon } from '~/components/Icon';
+import { useCashierSettings } from '~/hooks/useCashierSettings';
 
 interface Product {
   id: string;
@@ -40,6 +41,8 @@ interface CartItem extends Product {
 export function Cashier() {
   const theme = useTheme();
   const { styles } = useCashierStyles();
+  const { settings, isLoaded, updateProductViewMode, updateViewMode } = useCashierSettings();
+
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
@@ -51,9 +54,12 @@ export function Cashier() {
   const [discountType, setDiscountType] = useState<'coupon' | 'manual'>('manual');
   const [manualDiscountType, setManualDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [manualDiscountValue, setManualDiscountValue] = useState('');
-  const [viewMode, setViewMode] = useState<'split' | 'fullscreen'>('split');
   const [cartModalVisible, setCartModalVisible] = useState(false);
   const [orientationChangeTimeout, setOrientationChangeTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // Get current settings values
+  const viewMode = settings.viewMode;
+  const productViewMode = settings.productViewMode;
 
   // Mock discount codes for demo
   const discountCodes = {
@@ -654,6 +660,20 @@ export function Cashier() {
     </TouchableOpacity>
   );
 
+  const renderProductItemList = ({ item }: { item: Product }) => (
+    <TouchableOpacity style={[styles.productCardList]} onPress={() => addToCart(item)}>
+      <View style={styles.productListContent}>
+        <View style={styles.productListInfo}>
+          <Text style={[styles.productNameList, { color: theme.colors.text }]}>{item.name}</Text>
+          <Text style={[styles.productStockList, { color: theme.colors.text }]}>
+            Kho: {item.stock_quantity && item.stock_quantity !== 0 ? item.stock_quantity : item.stock_status}
+          </Text>
+        </View>
+        <Text style={[styles.productPriceList, { color: theme.colors.primary }]}>{formatCurrency(item.price)}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
   const renderCartItem = ({ item }: { item: CartItem }) => {
     const originalPrice = item.price * item.quantity;
     const finalPrice = item.finalPrice !== undefined ? item.finalPrice : originalPrice;
@@ -774,7 +794,7 @@ export function Cashier() {
               <Text style={[styles.title, { color: theme.colors.text }]}>Bán hàng POS</Text>
               <TouchableOpacity
                 style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
-                onPress={() => setViewMode(viewMode === 'split' ? 'fullscreen' : 'split')}
+                onPress={() => updateViewMode(viewMode === 'split' ? 'fullscreen' : 'split')}
               >
                 <Icon name={viewMode === 'split' ? 'open-in-full' : 'close-fullscreen'} size={20} color="#fff" />
               </TouchableOpacity>
@@ -821,16 +841,31 @@ export function Cashier() {
 
           <View style={styles.productsSection}>
             <View style={styles.productSectionHeader}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Sản phẩm</Text>
-              <Text style={styles.productCount}>{filteredProducts?.length || 0} sản phẩm</Text>
+              <View style={styles.productHeaderLeft}>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Sản phẩm</Text>
+                <Text style={styles.productCount}>{filteredProducts?.length || 0} sản phẩm</Text>
+              </View>
+              <View style={styles.productHeaderRight}>
+                <TouchableOpacity
+                  style={[styles.viewToggleButton, { backgroundColor: theme.colors.border }]}
+                  onPress={() => updateProductViewMode(productViewMode === 'grid' ? 'list' : 'grid')}
+                >
+                  <Icon
+                    name={productViewMode === 'grid' ? 'view-list' : 'view-module'}
+                    size={20}
+                    color={theme.colors.text}
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
             <FlatList
               data={filteredProducts}
-              renderItem={renderProductItem}
+              renderItem={productViewMode === 'grid' ? renderProductItem : renderProductItemList}
               keyExtractor={(item) => item.id}
-              numColumns={2}
+              numColumns={productViewMode === 'grid' ? 2 : 1}
+              key={productViewMode} // Force re-render when view mode changes
               scrollEnabled={false}
-              contentContainerStyle={styles.productsGrid}
+              contentContainerStyle={productViewMode === 'grid' ? styles.productsGrid : styles.productsList}
             />
           </View>
 
@@ -898,6 +933,17 @@ export function Cashier() {
     );
   }
 
+  // Don't render until settings are loaded
+  if (!isLoaded) {
+    return (
+      <SafeAreaView style={[styles.container]}>
+        <View style={styles.loadingContainer}>
+          <Text style={[styles.loadingText, { color: theme.colors.text }]}>Đang tải...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container]}>
       {/* Floating Cart Button for fullscreen mode */}
@@ -930,7 +976,7 @@ export function Cashier() {
               </Text>
               <TouchableOpacity
                 style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
-                onPress={() => setViewMode(viewMode === 'split' ? 'fullscreen' : 'split')}
+                onPress={() => updateViewMode(viewMode === 'split' ? 'fullscreen' : 'split')}
               >
                 <Icon name={viewMode === 'split' ? 'open-in-full' : 'close-fullscreen'} size={20} color="#fff" />
               </TouchableOpacity>
@@ -968,12 +1014,32 @@ export function Cashier() {
             ))}
           </ScrollView>
 
+          <View style={styles.productSectionHeader}>
+            <View style={styles.productHeaderLeft}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Sản phẩm</Text>
+              <Text style={styles.productCount}>{filteredProducts?.length || 0} sản phẩm</Text>
+            </View>
+            <View style={styles.productHeaderRight}>
+              <TouchableOpacity
+                style={[styles.viewToggleButton, { backgroundColor: theme.colors.border }]}
+                onPress={() => updateProductViewMode(productViewMode === 'grid' ? 'list' : 'grid')}
+              >
+                <Icon
+                  name={productViewMode === 'grid' ? 'view-list' : 'view-module'}
+                  size={20}
+                  color={theme.colors.text}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
           <FlatList
             data={filteredProducts}
-            renderItem={renderProductItem}
+            renderItem={productViewMode === 'grid' ? renderProductItem : renderProductItemList}
             keyExtractor={(item) => item.id}
-            numColumns={2}
-            contentContainerStyle={styles.productsGrid}
+            numColumns={productViewMode === 'grid' ? 2 : 1}
+            key={productViewMode}
+            contentContainerStyle={productViewMode === 'grid' ? styles.productsGrid : styles.productsList}
             showsVerticalScrollIndicator={false}
           />
         </View>

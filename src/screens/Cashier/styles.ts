@@ -7,6 +7,15 @@ export function useCashierStyles() {
     container: {
       flex: 1,
     },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    loadingText: {
+      fontSize: 16,
+      fontWeight: '500',
+    },
     mainContent: {
       flex: 1,
       flexDirection: 'row',
@@ -312,8 +321,60 @@ export function useCashierStyles() {
       alignItems: 'center',
       marginBottom: 12,
     },
+    productHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    productHeaderRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    viewToggleButton: {
+      padding: 8,
+      borderRadius: 8,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
     productCount: {
       color: theme.colors.text,
+    },
+
+    // List View Styles
+    productsList: {
+      paddingBottom: 16,
+    },
+    productCardList: {
+      margin: 6,
+      padding: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      marginBottom: 8,
+      backgroundColor: theme.colors.cardBackground,
+    },
+    productListContent: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    productListInfo: {
+      flex: 1,
+      marginRight: 16,
+    },
+    productNameList: {
+      fontSize: 16,
+      fontWeight: '600',
+      marginBottom: 4,
+    },
+    productStockList: {
+      fontSize: 12,
+      marginTop: 2,
+    },
+    productPriceList: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      textAlign: 'right',
     },
 
     // Cart Header Styles
