@@ -547,5 +547,108 @@ export function useCashierStyles() {
       color: '#fff',
       fontWeight: 'bold',
     },
+
+    // Floating Cart Button Styles
+    floatingCartButton: {
+      position: 'absolute',
+      bottom: 20,
+      right: 20,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 1000,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 8,
+    },
+    cartBadge: {
+      position: 'absolute',
+      top: -5,
+      right: -5,
+      backgroundColor: '#ff4444',
+      borderRadius: 12,
+      minWidth: 24,
+      height: 24,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 2,
+      borderColor: '#fff',
+    },
+    cartBadgeText: {
+      color: '#fff',
+      fontSize: 12,
+      fontWeight: 'bold',
+    },
+
+    // Cart Modal Styles
+    cartModalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'flex-end',
+    },
+    cartModalBackdrop: {
+      flex: 1,
+    },
+    cartModalContainer: {
+      height: '80%',
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingTop: 20,
+      paddingHorizontal: 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 8,
+    },
+    cartModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 20,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    cartModalTitle: {
+      fontSize: 24,
+      fontWeight: 'bold',
+    },
+    cartModalList: {
+      flex: 1,
+      marginBottom: 20,
+    },
+    cartModalPayment: {
+      borderTopWidth: 1,
+      paddingTop: 20,
+      marginBottom: 20,
+    },
+
+    // Header Styles
+    headerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    headerActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    viewModeToggle: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 4,
+    },
   }));
 }

@@ -15,6 +15,7 @@ import { useFetchData } from '~/hooks/useApi';
 import { useTheme } from '~/hooks/useTheme';
 import { useCashierStyles } from './styles';
 import { toastError, toastSuccess, toastInfo, toastWarning } from '~/hooks/useToast';
+import { Icon } from '~/components/Icon';
 
 interface Product {
   id: string;
@@ -50,6 +51,8 @@ export function Cashier() {
   const [discountType, setDiscountType] = useState<'coupon' | 'manual'>('manual');
   const [manualDiscountType, setManualDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [manualDiscountValue, setManualDiscountValue] = useState('');
+  const [viewMode, setViewMode] = useState<'split' | 'fullscreen'>('split');
+  const [cartModalVisible, setCartModalVisible] = useState(false);
 
   // Mock discount codes for demo
   const discountCodes = {
@@ -141,6 +144,12 @@ export function Cashier() {
           : item,
       ),
     );
+
+    // Update the quantity input state to sync with the new quantity
+    setQuantityInput((prev) => ({
+      ...prev,
+      [productId]: quantity.toString(),
+    }));
   };
 
   const calculateFinalPrice = (originalPrice: number, discountPercent?: number) => {
@@ -433,10 +442,117 @@ export function Cashier() {
   if (!isLandscape) {
     return (
       <SafeAreaView style={[styles.container]}>
+        {viewMode === 'fullscreen' && (
+          <>
+            {/* Floating Cart Button */}
+            <TouchableOpacity
+              style={[styles.floatingCartButton, { backgroundColor: theme.colors.primary }]}
+              onPress={() => setCartModalVisible(true)}
+            >
+              <Icon name="shopping-basket" size={24} color="#fff" />
+              {cart.length > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Cart Modal */}
+            <Modal
+              visible={cartModalVisible}
+              transparent={true}
+              animationType="slide"
+              onRequestClose={() => setCartModalVisible(false)}
+            >
+              <View style={styles.cartModalOverlay}>
+                <TouchableOpacity
+                  style={styles.cartModalBackdrop}
+                  activeOpacity={1}
+                  onPress={() => setCartModalVisible(false)}
+                />
+                <View style={[styles.cartModalContainer, { backgroundColor: theme.colors.cardBackground }]}>
+                  <View style={styles.cartModalHeader}>
+                    <Text style={[styles.cartModalTitle, { color: theme.colors.text }]}>Giỏ hàng</Text>
+                    <TouchableOpacity onPress={() => setCartModalVisible(false)}>
+                      <Icon name="close" size={24} color={theme.colors.text} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {cart.length === 0 ? (
+                    <View style={styles.emptyCartContainer}>
+                      <Text style={styles.emptyCartText}>Giỏ hàng trống{'\n'}Vui lòng thêm sản phẩm</Text>
+                    </View>
+                  ) : (
+                    <FlatList
+                      data={cart}
+                      renderItem={renderCartItem}
+                      keyExtractor={(item) => item.id}
+                      style={styles.cartModalList}
+                      showsVerticalScrollIndicator={false}
+                    />
+                  )}
+
+                  {/* Payment Summary */}
+                  <View style={[styles.cartModalPayment, { borderTopColor: theme.colors.border }]}>
+                    {getTotalDiscount() > 0 && (
+                      <View style={styles.summaryRow}>
+                        <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
+                        <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
+                          {formatCurrency(getOriginalTotal())}
+                        </Text>
+                      </View>
+                    )}
+
+                    {getTotalDiscount() > 0 && (
+                      <View style={styles.summaryRow}>
+                        <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
+                        <Text style={[styles.summaryValue, { color: '#28a745' }]}>
+                          -{formatCurrency(getTotalDiscount())}
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={styles.summaryRow}>
+                      <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>
+                        Thành tiền:
+                      </Text>
+                      <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
+                        {formatCurrency(getTotalAmount())}
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.checkoutButton,
+                        { backgroundColor: theme.colors.primary, opacity: cart.length === 0 ? 0.6 : 1 },
+                      ]}
+                      onPress={() => {
+                        handleCheckout();
+                        setCartModalVisible(false);
+                      }}
+                      disabled={cart.length === 0}
+                    >
+                      <Text style={styles.checkoutButtonText}>Thanh toán</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </Modal>
+          </>
+        )}
+
         <ScrollView style={styles.portraitContainer} showsVerticalScrollIndicator={false}>
           {/* Header */}
           <View style={styles.portraitHeader}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>Bán hàng POS</Text>
+            <View style={styles.headerRow}>
+              <Text style={[styles.title, { color: theme.colors.text }]}>Bán hàng POS</Text>
+              <TouchableOpacity
+                style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
+                onPress={() => setViewMode(viewMode === 'split' ? 'fullscreen' : 'split')}
+              >
+                <Icon name={viewMode === 'split' ? 'open-in-full' : 'close-fullscreen'} size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.searchSection}>
@@ -492,7 +608,7 @@ export function Cashier() {
             />
           </View>
 
-          {cart.length > 0 && (
+          {cart.length > 0 && viewMode === 'split' && (
             <View style={[styles.portraitCartSection, { backgroundColor: theme.colors.cardBackground }]}>
               <View style={styles.cartHeader}>
                 <View style={styles.cartHeaderRow}>
@@ -555,11 +671,120 @@ export function Cashier() {
 
   return (
     <SafeAreaView style={[styles.container]}>
+      {/* Floating Cart Button for fullscreen mode */}
+      {viewMode === 'fullscreen' && (
+        <>
+          <TouchableOpacity
+            style={[styles.floatingCartButton, { backgroundColor: theme.colors.primary }]}
+            onPress={() => setCartModalVisible(true)}
+          >
+            <Icon name="shopping-basket" size={24} color="#fff" />
+            {cart.length > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Cart Modal for fullscreen mode */}
+          <Modal
+            visible={cartModalVisible}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setCartModalVisible(false)}
+          >
+            <View style={styles.cartModalOverlay}>
+              <TouchableOpacity
+                style={styles.cartModalBackdrop}
+                activeOpacity={1}
+                onPress={() => setCartModalVisible(false)}
+              />
+              <View style={[styles.cartModalContainer, { backgroundColor: theme.colors.cardBackground }]}>
+                <View style={styles.cartModalHeader}>
+                  <Text style={[styles.cartModalTitle, { color: theme.colors.text }]}>Giỏ hàng</Text>
+                  <TouchableOpacity onPress={() => setCartModalVisible(false)}>
+                    <Icon name="close" size={24} color={theme.colors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                {cart.length === 0 ? (
+                  <View style={styles.emptyCartContainer}>
+                    <Text style={styles.emptyCartText}>Giỏ hàng trống{'\n'}Vui lòng thêm sản phẩm</Text>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={cart}
+                    renderItem={renderCartItem}
+                    keyExtractor={(item) => item.id}
+                    style={styles.cartModalList}
+                    showsVerticalScrollIndicator={false}
+                  />
+                )}
+
+                {/* Payment Summary */}
+                <View style={[styles.cartModalPayment, { borderTopColor: theme.colors.border }]}>
+                  {getTotalDiscount() > 0 && (
+                    <View style={styles.summaryRow}>
+                      <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
+                      <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
+                        {formatCurrency(getOriginalTotal())}
+                      </Text>
+                    </View>
+                  )}
+
+                  {getTotalDiscount() > 0 && (
+                    <View style={styles.summaryRow}>
+                      <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
+                      <Text style={[styles.summaryValue, { color: '#28a745' }]}>
+                        -{formatCurrency(getTotalDiscount())}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>
+                      Thành tiền:
+                    </Text>
+                    <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
+                      {formatCurrency(getTotalAmount())}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.checkoutButton,
+                      { backgroundColor: theme.colors.primary, opacity: cart.length === 0 ? 0.6 : 1 },
+                    ]}
+                    onPress={() => {
+                      handleCheckout();
+                      setCartModalVisible(false);
+                    }}
+                    disabled={cart.length === 0}
+                  >
+                    <Text style={styles.checkoutButtonText}>Thanh toán</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+        </>
+      )}
+
       <View style={styles.mainContent}>
-        <View style={[styles.leftPanel]}>
+        <View style={[styles.leftPanel, { flex: viewMode === 'fullscreen' ? 1 : 2 }]}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: theme.colors.text }]}>Sản phẩm</Text>
-            <Text style={[{ color: theme.colors.text, fontSize: 16 }]}>{filteredProducts?.length || 0} sản phẩm</Text>
+            <View style={styles.headerActions}>
+              <Text style={[{ color: theme.colors.text, fontSize: 16, marginRight: 12 }]}>
+                {filteredProducts?.length || 0} sản phẩm
+              </Text>
+              <TouchableOpacity
+                style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
+                onPress={() => setViewMode(viewMode === 'split' ? 'fullscreen' : 'split')}
+              >
+                <Icon name={viewMode === 'split' ? 'open-in-full' : 'close-fullscreen'} size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Search Bar */}
@@ -603,66 +828,68 @@ export function Cashier() {
           />
         </View>
 
-        {/* Right Side - Cart & Payment */}
-        <View style={[styles.rightPanel, { backgroundColor: theme.colors.cardBackground }]}>
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>Giỏ hàng</Text>
-            <View style={styles.cartItemsBadgeLarge}>
-              <Text style={styles.cartItemsBadgeTextLarge}>{getTotalItems()}</Text>
+        {/* Right Side - Cart & Payment (Only in split mode) */}
+        {viewMode === 'split' && (
+          <View style={[styles.rightPanel, { backgroundColor: theme.colors.cardBackground }]}>
+            <View style={styles.header}>
+              <Text style={[styles.title, { color: theme.colors.text }]}>Giỏ hàng</Text>
+              <View style={styles.cartItemsBadgeLarge}>
+                <Text style={styles.cartItemsBadgeTextLarge}>{getTotalItems()}</Text>
+              </View>
             </View>
-          </View>
 
-          {cart.length === 0 ? (
-            <View style={styles.emptyCartContainer}>
-              <Text style={styles.emptyCartText}>Giỏ hàng trống{'\n'}Vui lòng thêm sản phẩm</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={cart}
-              renderItem={renderCartItem}
-              keyExtractor={(item) => item.id}
-              style={styles.cartList}
-              showsVerticalScrollIndicator={false}
-            />
-          )}
+            {cart.length === 0 ? (
+              <View style={styles.emptyCartContainer}>
+                <Text style={styles.emptyCartText}>Giỏ hàng trống{'\n'}Vui lòng thêm sản phẩm</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={cart}
+                renderItem={renderCartItem}
+                keyExtractor={(item) => item.id}
+                style={styles.cartList}
+                showsVerticalScrollIndicator={false}
+              />
+            )}
 
-          {/* Payment Summary */}
-          <View style={[styles.paymentSummary, { borderTopColor: theme.colors.border }]}>
-            {getTotalDiscount() > 0 && (
+            {/* Payment Summary */}
+            <View style={[styles.paymentSummary, { borderTopColor: theme.colors.border }]}>
+              {getTotalDiscount() > 0 && (
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
+                  <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
+                    {formatCurrency(getOriginalTotal())}
+                  </Text>
+                </View>
+              )}
+
+              {getTotalDiscount() > 0 && (
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
+                  <Text style={[styles.summaryValue, { color: '#28a745' }]}>-{formatCurrency(getTotalDiscount())}</Text>
+                </View>
+              )}
+
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
-                <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-                  {formatCurrency(getOriginalTotal())}
+                <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>Thành tiền:</Text>
+                <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
+                  {formatCurrency(getTotalAmount())}
                 </Text>
               </View>
-            )}
 
-            {getTotalDiscount() > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Giảm giá:</Text>
-                <Text style={[styles.summaryValue, { color: '#28a745' }]}>-{formatCurrency(getTotalDiscount())}</Text>
-              </View>
-            )}
-
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>Thành tiền:</Text>
-              <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
-                {formatCurrency(getTotalAmount())}
-              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.checkoutButton,
+                  { backgroundColor: theme.colors.primary, opacity: cart.length === 0 ? 0.6 : 1 },
+                ]}
+                onPress={handleCheckout}
+                disabled={cart.length === 0}
+              >
+                <Text style={styles.checkoutButtonText}>Thanh toán</Text>
+              </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              style={[
-                styles.checkoutButton,
-                { backgroundColor: theme.colors.primary, opacity: cart.length === 0 ? 0.6 : 1 },
-              ]}
-              onPress={handleCheckout}
-              disabled={cart.length === 0}
-            >
-              <Text style={styles.checkoutButtonText}>Thanh toán</Text>
-            </TouchableOpacity>
           </View>
-        </View>
+        )}
       </View>
 
       {/* Discount Modal */}
