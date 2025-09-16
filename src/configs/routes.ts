@@ -64,7 +64,7 @@ export const privateRoutes: RouteConfig[] = [
   {
     name: 'HomeTabs',
     component: Cashier,
-    layout: LayoutSidebar,
+    layout: GradientBackground,
     options: {
       headerShown: false,
     },

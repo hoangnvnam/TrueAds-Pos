@@ -32,7 +32,6 @@ export function useCashierStyles() {
       flex: 1,
       padding: 16,
       borderRadius: 12,
-      marginLeft: 8,
     },
 
     // Portrait Layout Styles
@@ -54,11 +53,8 @@ export function useCashierStyles() {
     portraitCartSection: {
       margin: 16,
       borderRadius: 16,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.1,
-      shadowRadius: 5,
-      elevation: 4,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
       padding: 16,
     },
     portraitCartList: {
@@ -212,11 +208,11 @@ export function useCashierStyles() {
       marginBottom: 16,
     },
     summaryLabel: {
-      fontSize: 20,
+      fontSize: 16,
       fontWeight: 'bold',
     },
     summaryValue: {
-      fontSize: 20,
+      fontSize: 16,
       fontWeight: 'bold',
     },
     checkoutButton: {
@@ -711,6 +707,91 @@ export function useCashierStyles() {
       shadowOpacity: 0.2,
       shadowRadius: 4,
       elevation: 4,
+    },
+
+    // Order Tabs Styles
+    orderTabsContainer: {
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    orderTabsScrollView: {
+      flexGrow: 0,
+    },
+    orderTab: {
+      marginRight: 8,
+      paddingHorizontal: 8, // Reduce padding to make space for close button
+      paddingVertical: 8,
+      borderRadius: 20,
+      borderWidth: 1,
+      minWidth: 120, // Increase min width to accommodate all elements
+    },
+    orderTabContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between', // Change to space-between for better layout
+      flex: 1,
+    },
+    orderTabText: {
+      fontSize: 14,
+      fontWeight: '500',
+      marginRight: 4, // Reduce margin
+      flex: 1, // Allow text to take available space
+    },
+    orderTabBadge: {
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 4, // Reduce margin
+    },
+    orderTabBadgeText: {
+      fontSize: 11,
+      fontWeight: 'bold',
+    },
+    orderTabCloseButton: {
+      width: 24, // Increase touch area
+      height: 24, // Increase touch area
+      borderRadius: 12,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginLeft: 4, // Add some spacing
+      // Add visual feedback
+      opacity: 0.9,
+      // Separate touch area from parent
+      position: 'relative',
+      zIndex: 999,
+    },
+    orderTabCloseText: {
+      fontSize: 16, // Make it slightly bigger
+      fontWeight: 'bold',
+      lineHeight: 16,
+      textAlign: 'center',
+      // Add text shadow for better visibility
+      textShadowColor: 'rgba(0,0,0,0.3)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 2,
+    },
+    addOrderButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minWidth: 100,
+    },
+    addOrderButtonText: {
+      fontSize: 14,
+      fontWeight: '500',
+    },
+
+    // Cart Modal Order Tabs
+    cartModalOrderTabs: {
+      paddingTop: 8,
+      paddingHorizontal: 8,
     },
   }));
 }

@@ -3,40 +3,44 @@ import {
   Alert,
   Dimensions,
   FlatList,
-  SafeAreaView,
+  Modal,
   ScrollView,
   Switch,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  Modal,
 } from 'react-native';
-import { useFetchData } from '~/hooks/useApi';
-import { useTheme } from '~/hooks/useTheme';
-import { useCashierStyles } from './styles';
-import { toastError, toastSuccess, toastInfo, toastWarning } from '~/hooks/useToast';
-import { Icon } from '~/components/Icon';
-import { useCashierSettings } from '~/hooks/useCashierSettings';
 import BottomSheetModal from '~/components/BottomSheetModal';
+import { Icon } from '~/components/Icon';
 import { Image } from '~/components/Image';
-import { formatCurrency } from '~/utils/format';
 import {
-  Category,
-  ProcessedCategory,
-  ProductCategory,
-  Product,
   CartItem,
+  Category,
   OrderDiscount,
+  ProcessedCategory,
+  Product,
+  ProductCategory,
   Promotion,
 } from '~/constants/interfaces';
+import { useFetchData } from '~/hooks/useApi';
+import { useCashierSettings } from '~/hooks/useCashierSettings';
+import { useTheme } from '~/hooks/useTheme';
+import { toastInfo, toastSuccess, toastWarning } from '~/hooks/useToast';
+import { formatCurrency } from '~/utils/format';
+import { useCashierStyles } from './styles';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export function Cashier() {
   const theme = useTheme();
   const { styles } = useCashierStyles();
   const { settings, isLoaded, updateProductViewMode, updateViewMode, updateAutoPrint } = useCashierSettings();
 
-  const [cart, setCart] = useState<CartItem[]>([]);
+  // Multi-order state
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [orderCounter, setOrderCounter] = useState(1); // Track highest order number
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<number | 'all'>('all');
   const [screenData, setScreenData] = useState(Dimensions.get('window'));
@@ -50,16 +54,108 @@ export function Cashier() {
   const [cartBottomSheetVisible, setCartBottomSheetVisible] = useState(false);
   const [orientationChangeTimeout, setOrientationChangeTimeout] = useState<NodeJS.Timeout | null>(null);
 
-  // New states for order discount, promotion and footer collapsed
-  const [orderDiscount, setOrderDiscount] = useState<OrderDiscount | null>(null);
-  const [orderPromotion, setOrderPromotion] = useState<Promotion | null>(null);
+  // Modal states for order-level discount/promotion
   const [footerCollapsed, setFooterCollapsed] = useState(false);
-
   const [orderDiscountModalVisible, setOrderDiscountModalVisible] = useState(false);
   const [promotionModalVisible, setPromotionModalVisible] = useState(false);
   const [orderDiscountType, setOrderDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [orderDiscountValue, setOrderDiscountValue] = useState('');
   const [promotionCode, setPromotionCode] = useState('');
+
+  // Helper function to get current active order
+  const getCurrentOrder = (): Order | null => {
+    return orders.find((order) => order.id === activeOrderId) || null;
+  };
+
+  // Helper function to get current cart items
+  const cart = getCurrentOrder()?.items || [];
+
+  // Helper function to get current order discount
+  const orderDiscount = getCurrentOrder()?.orderDiscount || null;
+
+  // Helper function to get current order promotion
+  const orderPromotion = getCurrentOrder()?.orderPromotion || null;
+
+  // Initialize with first order and setup orderCounter
+  useEffect(() => {
+    if (orders.length === 0) {
+      // Create first order when app starts
+      createNewOrder();
+    }
+  }, []);
+
+  // Update orderCounter when orders change (for restoration scenarios)
+  useEffect(() => {
+    if (orders.length > 0) {
+      const maxOrderNumber = Math.max(...orders.map((order) => order.orderNumber || 0));
+      if (maxOrderNumber >= orderCounter) {
+        setOrderCounter(maxOrderNumber + 1);
+      }
+    }
+  }, [orders]);
+
+  // Function to create new order
+  const createNewOrder = () => {
+    const newOrderId = `order_${Date.now()}`;
+    const newOrder: Order = {
+      id: newOrderId,
+      name: `Đơn hàng ${orderCounter}`,
+      orderNumber: orderCounter,
+      items: [],
+      orderDiscount: null,
+      orderPromotion: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    setOrders((prev) => [...prev, newOrder]);
+    setActiveOrderId(newOrderId);
+    setOrderCounter((prev) => prev + 1); // Increment counter for next order
+  };
+
+  // Function to rename an order (optional feature)
+  const renameOrder = (orderId: string, newName: string) => {
+    setOrders((prevOrders) =>
+      prevOrders.map((order) => {
+        if (order.id === orderId) {
+          return {
+            ...order,
+            name: newName,
+            updatedAt: new Date(),
+          };
+        }
+        return order;
+      }),
+    );
+  };
+
+  // Function to delete an order
+  const deleteOrder = (orderId: string) => {
+    if (orders.length <= 1) {
+      Alert.alert('Thông báo', 'Phải có ít nhất 1 đơn hàng');
+      return;
+    }
+
+    const orderToDelete = orders.find((order) => order.id === orderId);
+    console.log(`Deleting order: ${orderToDelete?.name} (Number: ${orderToDelete?.orderNumber})`);
+
+    setOrders((prev) => {
+      const newOrders = prev.filter((order) => order.id !== orderId);
+
+      // If deleting active order, switch to another order
+      if (orderId === activeOrderId) {
+        const remainingOrder = newOrders[0];
+        setActiveOrderId(remainingOrder?.id || null);
+      }
+
+      return newOrders;
+    });
+  };
+
+  // Function to switch active order
+  const switchToOrder = (orderId: string) => {
+    setActiveOrderId(orderId);
+  };
 
   const viewMode = settings.viewMode;
   const productViewMode = settings.productViewMode;
@@ -135,7 +231,6 @@ export function Cashier() {
   }, [orientationChangeTimeout]);
 
   const isLandscape = screenData.width > screenData.height + 50;
-  const isTablet = Math.min(screenData.width, screenData.height) >= 600;
 
   const filteredProducts = dataProducts?.data?.filter((product: any) => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -154,27 +249,59 @@ export function Cashier() {
 
   // Add product to cart or increase quantity if already exists
   const addToCart = (product: Product) => {
-    setCart((prevCart) => {
-      const existingItem = prevCart.find((item) => item.id === product.id);
-      if (existingItem) {
-        return prevCart.map((item) =>
-          item.id === product.id
-            ? {
-                ...item,
-                quantity: item.quantity + 1,
-                finalPrice: calculateFinalPrice(item.price, item.discountPercent) * (item.quantity + 1),
-              }
-            : item,
-        );
-      }
-      const newItem = { ...product, quantity: 1, finalPrice: product.price * 1 };
-      return [...prevCart, newItem];
-    });
+    if (!activeOrderId) return;
+
+    setOrders((prevOrders) =>
+      prevOrders.map((order) => {
+        if (order.id !== activeOrderId) return order;
+
+        const existingItem = order.items.find((item) => item.id === product.id);
+        let updatedItems;
+
+        if (existingItem) {
+          updatedItems = order.items.map((item) =>
+            item.id === product.id
+              ? {
+                  ...item,
+                  quantity: item.quantity + 1,
+                  finalPrice: calculateFinalPrice(item.price, item.discountPercent) * (item.quantity + 1),
+                }
+              : item,
+          );
+        } else {
+          const newItem: OrderItem = {
+            ...product,
+            quantity: 1,
+            finalPrice: product.price * 1,
+          };
+          updatedItems = [...order.items, newItem];
+        }
+
+        return {
+          ...order,
+          items: updatedItems,
+          updatedAt: new Date(),
+        };
+      }),
+    );
   };
 
   // Remove product from cart completely
   const removeFromCart = (productId: string) => {
-    setCart((prevCart) => prevCart.filter((item) => item.id !== productId));
+    if (!activeOrderId) return;
+
+    setOrders((prevOrders) =>
+      prevOrders.map((order) => {
+        if (order.id !== activeOrderId) return order;
+
+        return {
+          ...order,
+          items: order.items.filter((item) => item.id !== productId),
+          updatedAt: new Date(),
+        };
+      }),
+    );
+
     const updatedQuantityInput = { ...quantityInput };
     delete updatedQuantityInput[productId];
     setQuantityInput(updatedQuantityInput);
@@ -182,6 +309,8 @@ export function Cashier() {
 
   // Update quantity for a cart item
   const updateQuantity = (productId: string, quantity: number) => {
+    if (!activeOrderId) return;
+
     if (quantity <= 0) {
       removeFromCart(productId);
       return;
@@ -195,12 +324,20 @@ export function Cashier() {
       return;
     }
 
-    setCart((prevCart) =>
-      prevCart.map((item) =>
-        item.id === productId
-          ? { ...item, quantity, finalPrice: calculateFinalPrice(item.price, item.discountPercent) * quantity }
-          : item,
-      ),
+    setOrders((prevOrders) =>
+      prevOrders.map((order) => {
+        if (order.id !== activeOrderId) return order;
+
+        return {
+          ...order,
+          items: order.items.map((item) =>
+            item.id === productId
+              ? { ...item, quantity, finalPrice: calculateFinalPrice(item.price, item.discountPercent) * quantity }
+              : item,
+          ),
+          updatedAt: new Date(),
+        };
+      }),
     );
 
     setQuantityInput((prev) => ({
@@ -217,7 +354,7 @@ export function Cashier() {
 
   // Apply discount to selected cart item
   const applyDiscount = () => {
-    if (!selectedItemForDiscount) {
+    if (!selectedItemForDiscount || !activeOrderId) {
       Alert.alert('Thông báo', 'Vui lòng chọn sản phẩm');
       return;
     }
@@ -234,22 +371,30 @@ export function Cashier() {
         return;
       }
 
-      setCart((prevCart) =>
-        prevCart.map((item) => {
-          if (item.id === selectedItemForDiscount) {
-            const finalPrice = calculateFinalPrice(item.price, discount.percent);
-            return {
-              ...item,
-              discountCode: discountCode.toUpperCase(),
-              discountPercent: discount.percent,
-              discountAmount: item.price - finalPrice,
-              finalPrice: finalPrice * item.quantity,
-              isManualDiscount: false,
-              manualDiscountType: undefined,
-              manualDiscountValue: undefined,
-            };
-          }
-          return item;
+      setOrders((prevOrders) =>
+        prevOrders.map((order) => {
+          if (order.id !== activeOrderId) return order;
+
+          return {
+            ...order,
+            items: order.items.map((item) => {
+              if (item.id === selectedItemForDiscount) {
+                const finalPrice = calculateFinalPrice(item.price, discount.percent);
+                return {
+                  ...item,
+                  discountCode: discountCode.toUpperCase(),
+                  discountPercent: discount.percent,
+                  discountAmount: item.price - finalPrice,
+                  finalPrice: finalPrice * item.quantity,
+                  isManualDiscount: false,
+                  manualDiscountType: undefined,
+                  manualDiscountValue: undefined,
+                };
+              }
+              return item;
+            }),
+            updatedAt: new Date(),
+          };
         }),
       );
 
@@ -275,7 +420,6 @@ export function Cashier() {
         }
         discountPercent = discountValue;
         finalPrice = cartItem.price * (1 - discountValue / 100);
-
         discountAmount = cartItem.price - finalPrice;
       } else {
         if (discountValue > cartItem.price) {
@@ -284,24 +428,32 @@ export function Cashier() {
         }
         discountAmount = discountValue;
         finalPrice = cartItem.price - discountValue;
-
         discountPercent = (discountValue / cartItem.price) * 100;
       }
-      setCart((prevCart) =>
-        prevCart.map((item) => {
-          if (item.id === selectedItemForDiscount) {
-            return {
-              ...item,
-              discountCode: undefined,
-              discountPercent,
-              discountAmount,
-              finalPrice: finalPrice * item.quantity,
-              isManualDiscount: true,
-              manualDiscountType,
-              manualDiscountValue: discountValue,
-            };
-          }
-          return item;
+
+      setOrders((prevOrders) =>
+        prevOrders.map((order) => {
+          if (order.id !== activeOrderId) return order;
+
+          return {
+            ...order,
+            items: order.items.map((item) => {
+              if (item.id === selectedItemForDiscount) {
+                return {
+                  ...item,
+                  discountCode: undefined,
+                  discountPercent,
+                  discountAmount,
+                  finalPrice: finalPrice * item.quantity,
+                  isManualDiscount: true,
+                  manualDiscountType,
+                  manualDiscountValue: discountValue,
+                };
+              }
+              return item;
+            }),
+            updatedAt: new Date(),
+          };
         }),
       );
 
@@ -319,6 +471,8 @@ export function Cashier() {
 
   // Apply discount to entire order
   const applyOrderDiscount = () => {
+    if (!activeOrderId) return;
+
     const discountValue = parseFloat(orderDiscountValue);
     if (!discountValue || discountValue <= 0) {
       Alert.alert('Lỗi', 'Vui lòng nhập giá trị giảm giá hợp lệ');
@@ -343,11 +497,23 @@ export function Cashier() {
       discountAmount = discountValue;
     }
 
-    setOrderDiscount({
+    const newOrderDiscount: OrderDiscount = {
       type: orderDiscountType,
       value: discountValue,
       amount: discountAmount,
-    });
+    };
+
+    setOrders((prevOrders) =>
+      prevOrders.map((order) => {
+        if (order.id !== activeOrderId) return order;
+
+        return {
+          ...order,
+          orderDiscount: newOrderDiscount,
+          updatedAt: new Date(),
+        };
+      }),
+    );
 
     setOrderDiscountModalVisible(false);
     setOrderDiscountValue('');
@@ -358,6 +524,8 @@ export function Cashier() {
 
   // Apply promotion code to order
   const applyPromotion = async () => {
+    if (!activeOrderId) return;
+
     if (!promotionCode.trim()) {
       Alert.alert('Thông báo', 'Vui lòng nhập mã khuyến mãi');
       return;
@@ -387,13 +555,25 @@ export function Cashier() {
         promotionAmount = Math.min(promotionData.value, orderSubtotal);
       }
 
-      setOrderPromotion({
+      const newOrderPromotion: OrderPromotion = {
         code: promotionCode.toUpperCase(),
         name: promotionData.name,
         type: promotionData.type,
         value: promotionData.value,
         amount: promotionAmount,
-      });
+      };
+
+      setOrders((prevOrders) =>
+        prevOrders.map((order) => {
+          if (order.id !== activeOrderId) return order;
+
+          return {
+            ...order,
+            orderPromotion: newOrderPromotion,
+            updatedAt: new Date(),
+          };
+        }),
+      );
 
       setPromotionModalVisible(false);
       setPromotionCode('');
@@ -405,42 +585,89 @@ export function Cashier() {
   };
 
   const removeOrderDiscount = () => {
-    setOrderDiscount(null);
+    if (!activeOrderId) return;
+
+    setOrders((prevOrders) =>
+      prevOrders.map((order) => {
+        if (order.id !== activeOrderId) return order;
+
+        return {
+          ...order,
+          orderDiscount: null,
+          updatedAt: new Date(),
+        };
+      }),
+    );
     toastInfo('Đã bỏ giảm giá');
   };
 
   const removeOrderPromotion = () => {
-    setOrderPromotion(null);
+    if (!activeOrderId) return;
+
+    setOrders((prevOrders) =>
+      prevOrders.map((order) => {
+        if (order.id !== activeOrderId) return order;
+
+        return {
+          ...order,
+          orderPromotion: null,
+          updatedAt: new Date(),
+        };
+      }),
+    );
     toastInfo('Đã bỏ khuyến mãi');
   };
 
   // Recalculate order-level discounts when cart changes
   const recalculateOrderDiscounts = () => {
-    const subtotal = getOrderSubtotal();
+    if (!activeOrderId) return;
 
-    if (orderDiscount) {
+    const subtotal = getOrderSubtotal();
+    const currentOrder = getCurrentOrder();
+
+    if (currentOrder?.orderDiscount) {
       let newAmount = 0;
-      if (orderDiscount.type === 'percentage') {
-        newAmount = (subtotal * orderDiscount.value) / 100;
+      if (currentOrder.orderDiscount.type === 'percentage') {
+        newAmount = (subtotal * currentOrder.orderDiscount.value) / 100;
       } else {
-        newAmount = Math.min(orderDiscount.value, subtotal);
+        newAmount = Math.min(currentOrder.orderDiscount.value, subtotal);
       }
 
-      if (newAmount !== orderDiscount.amount) {
-        setOrderDiscount((prev) => (prev ? { ...prev, amount: newAmount } : null));
+      if (newAmount !== currentOrder.orderDiscount.amount) {
+        setOrders((prevOrders) =>
+          prevOrders.map((order) => {
+            if (order.id !== activeOrderId) return order;
+
+            return {
+              ...order,
+              orderDiscount: order.orderDiscount ? { ...order.orderDiscount, amount: newAmount } : null,
+              updatedAt: new Date(),
+            };
+          }),
+        );
       }
     }
 
-    if (orderPromotion) {
+    if (currentOrder?.orderPromotion) {
       let newAmount = 0;
-      if (orderPromotion.type === 'percentage') {
-        newAmount = (subtotal * orderPromotion.value) / 100;
+      if (currentOrder.orderPromotion.type === 'percentage') {
+        newAmount = (subtotal * currentOrder.orderPromotion.value) / 100;
       } else {
-        newAmount = Math.min(orderPromotion.value, subtotal);
+        newAmount = Math.min(currentOrder.orderPromotion.value, subtotal);
       }
 
-      if (newAmount !== orderPromotion.amount) {
-        setOrderPromotion((prev) => (prev ? { ...prev, amount: newAmount } : null));
+      if (newAmount !== currentOrder.orderPromotion.amount) {
+        setOrders((prevOrders) =>
+          prevOrders.map((order) => {
+            if (order.id !== activeOrderId) return order;
+
+            return {
+              ...order,
+              orderPromotion: order.orderPromotion ? { ...order.orderPromotion, amount: newAmount } : null,
+              updatedAt: new Date(),
+            };
+          }),
+        );
       }
     }
   };
@@ -450,21 +677,31 @@ export function Cashier() {
   }, [cart]);
 
   const removeDiscount = (productId: string) => {
-    setCart((prevCart) =>
-      prevCart.map((item) =>
-        item.id === productId
-          ? {
-              ...item,
-              discountCode: undefined,
-              discountPercent: undefined,
-              discountAmount: undefined,
-              finalPrice: item.price * item.quantity,
-              isManualDiscount: undefined,
-              manualDiscountType: undefined,
-              manualDiscountValue: undefined,
-            }
-          : item,
-      ),
+    if (!activeOrderId) return;
+
+    setOrders((prevOrders) =>
+      prevOrders.map((order) => {
+        if (order.id !== activeOrderId) return order;
+
+        return {
+          ...order,
+          items: order.items.map((item) =>
+            item.id === productId
+              ? {
+                  ...item,
+                  discountCode: undefined,
+                  discountPercent: undefined,
+                  discountAmount: undefined,
+                  finalPrice: item.price * item.quantity,
+                  isManualDiscount: undefined,
+                  manualDiscountType: undefined,
+                  manualDiscountValue: undefined,
+                }
+              : item,
+          ),
+          updatedAt: new Date(),
+        };
+      }),
     );
   };
 
@@ -1223,8 +1460,15 @@ export function Cashier() {
 
   const renderCartBottomSheet = () => {
     const renderCartHeader = () => (
-      <View style={styles.cartModalHeader}>
-        <Text style={[styles.cartModalTitle, { color: theme.colors.text }]}>Giỏ hàng</Text>
+      <View>
+        {/* Order Tabs */}
+        <View style={styles.cartModalOrderTabs}>{renderOrderTabs()}</View>
+
+        <View style={styles.cartModalHeader}>
+          <Text style={[styles.cartModalTitle, { color: theme.colors.text }]}>
+            {getCurrentOrder()?.name || 'Giỏ hàng'}
+          </Text>
+        </View>
       </View>
     );
 
@@ -1296,8 +1540,10 @@ export function Cashier() {
     );
   };
 
-  // Process checkout and reset cart
+  // Process checkout and reset current order
   const handleCheckout = () => {
+    if (!activeOrderId || cart.length === 0) return;
+
     const originalTotal = getOriginalTotal();
     const itemDiscountTotal = getTotalDiscount();
     const orderDiscountAmount = orderDiscount?.amount || 0;
@@ -1334,11 +1580,22 @@ export function Cashier() {
 
     toastSuccess(message);
 
-    // Reset everything
-    setCart([]);
+    // Reset current order instead of all orders
+    setOrders((prevOrders) =>
+      prevOrders.map((order) => {
+        if (order.id !== activeOrderId) return order;
+
+        return {
+          ...order,
+          items: [],
+          orderDiscount: null,
+          orderPromotion: null,
+          updatedAt: new Date(),
+        };
+      }),
+    );
+
     setQuantityInput({});
-    setOrderDiscount(null);
-    setOrderPromotion(null);
     setFooterCollapsed(false);
   };
 
@@ -1368,7 +1625,119 @@ export function Cashier() {
     </TouchableOpacity>
   );
 
-  const renderCartItem = ({ item }: { item: CartItem }) => {
+  // Render Order Tabs component
+  const renderOrderTabs = React.useCallback(() => {
+    return (
+      <View style={styles.orderTabsContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.orderTabsScrollView}>
+          {orders.map((order, index) => (
+            <TouchableOpacity
+              key={order.id}
+              style={[
+                styles.orderTab,
+                {
+                  backgroundColor: activeOrderId === order.id ? theme.colors.primary : theme.colors.cardBackground,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+              onPress={() => switchToOrder(order.id)}
+              activeOpacity={0.8}
+              delayPressIn={0} // Immediate feedback for tab switch
+            >
+              <View style={styles.orderTabContent}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <Text
+                    style={[styles.orderTabText, { color: activeOrderId === order.id ? '#fff' : theme.colors.text }]}
+                  >
+                    {order.name}
+                  </Text>
+                  {order.items.length > 0 && (
+                    <View
+                      style={[
+                        styles.orderTabBadge,
+                        { backgroundColor: activeOrderId === order.id ? '#fff' : theme.colors.primary },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.orderTabBadgeText,
+                          { color: activeOrderId === order.id ? theme.colors.primary : '#fff' },
+                        ]}
+                      >
+                        {order.items.reduce((total, item) => total + item.quantity, 0)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                {orders.length > 1 && (
+                  <TouchableOpacity
+                    style={[
+                      styles.orderTabCloseButton,
+                      {
+                        backgroundColor: activeOrderId === order.id ? 'rgba(255,255,255,0.2)' : 'rgba(220,53,69,0.1)',
+                      },
+                    ]}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+
+                      // Add confirmation for delete action with usage hint
+                      Alert.alert(
+                        'Xác nhận xóa',
+                        `Bạn có chắc muốn xóa "${order.name}"?\n\n💡 Mẹo: Nhấn giữ nút × để xóa nhanh không cần xác nhận.`,
+                        [
+                          {
+                            text: 'Hủy',
+                            style: 'cancel',
+                          },
+                          {
+                            text: 'Xóa',
+                            style: 'destructive',
+                            onPress: () => deleteOrder(order.id),
+                          },
+                        ],
+                      );
+                    }}
+                    onLongPress={(e) => {
+                      // Alternative: immediate delete on long press with haptic feedback
+                      e.stopPropagation();
+                      // Add haptic feedback if available
+                      if (require('react-native').Vibration) {
+                        require('react-native').Vibration.vibrate(50);
+                      }
+                      deleteOrder(order.id);
+                    }}
+                    delayLongPress={600} // Reduce to 600ms for better UX
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} // Increase touch area
+                    activeOpacity={0.6}
+                  >
+                    <Text
+                      style={[styles.orderTabCloseText, { color: activeOrderId === order.id ? '#fff' : '#dc3545' }]}
+                    >
+                      ×
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </TouchableOpacity>
+          ))}
+
+          {/* Add New Order Button */}
+          <TouchableOpacity
+            style={[
+              styles.addOrderButton,
+              { backgroundColor: theme.colors.cardBackground, borderColor: theme.colors.border },
+            ]}
+            onPress={createNewOrder}
+          >
+            <Text style={[styles.addOrderButtonText, { color: theme.colors.primary }]}>+ Thêm đơn</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    );
+  }, [orders, activeOrderId, theme.colors, switchToOrder, deleteOrder, createNewOrder]);
+
+  const renderCartItem = ({ item }: { item: OrderItem }) => {
     const originalPrice = item.price * item.quantity;
     const finalPrice = item.finalPrice !== undefined ? item.finalPrice : originalPrice;
 
@@ -1570,24 +1939,36 @@ export function Cashier() {
             />
           </View>
 
-          {cart.length > 0 && viewMode === 'split' && (
-            <View style={[styles.portraitCartSection, { backgroundColor: theme.colors.cardBackground }]}>
+          {/* Always show order management, even when cart is empty */}
+          {viewMode === 'split' && (
+            <View style={[styles.portraitCartSection]}>
+              {/* Order Tabs */}
+              {renderOrderTabs()}
+
               <View style={styles.cartHeader}>
                 <View style={styles.cartHeaderRow}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Giỏ hàng</Text>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                    {getCurrentOrder()?.name || 'Giỏ hàng'}
+                  </Text>
                   <View style={styles.cartItemsBadge}>
                     <Text style={styles.cartItemsBadgeText}>{getTotalItems()}</Text>
                   </View>
                 </View>
               </View>
 
-              <FlatList
-                data={cart}
-                renderItem={renderCartItem}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-                style={styles.portraitCartList}
-              />
+              {cart.length === 0 ? (
+                <View style={styles.emptyCartContainer}>
+                  <Text style={styles.emptyCartText}>Giỏ hàng trống{'\n'}Vui lòng thêm sản phẩm</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={cart}
+                  renderItem={renderCartItem}
+                  keyExtractor={(item) => item.id}
+                  scrollEnabled={false}
+                  style={styles.portraitCartList}
+                />
+              )}
 
               <View style={[styles.portraitCheckout, { borderTopColor: theme.colors.border }]}>
                 {/* Collapsible footer toggle */}
@@ -1761,7 +2142,7 @@ export function Cashier() {
             key={productViewMode}
             contentContainerStyle={[
               productViewMode === 'grid' ? styles.productsGrid : styles.productsList,
-              { paddingBottom: 150 },
+              { paddingBottom: 200 },
             ]}
             showsVerticalScrollIndicator={false}
           />
@@ -1769,9 +2150,12 @@ export function Cashier() {
 
         {/* Right Side - Cart & Payment (Only in split mode) */}
         {viewMode === 'split' && (
-          <View style={[styles.rightPanel, { backgroundColor: theme.colors.cardBackground }]}>
+          <View style={[styles.rightPanel]}>
+            {/* Order Tabs */}
+            {renderOrderTabs()}
+
             <View style={styles.header}>
-              <Text style={[styles.title, { color: theme.colors.text }]}>Giỏ hàng</Text>
+              <Text style={[styles.title, { color: theme.colors.text }]}>{getCurrentOrder()?.name || 'Giỏ hàng'}</Text>
               <View style={styles.cartItemsBadgeLarge}>
                 <Text style={styles.cartItemsBadgeTextLarge}>{getTotalItems()}</Text>
               </View>
@@ -1836,7 +2220,6 @@ export function Cashier() {
         )}
       </View>
 
-      {/* Discount Modal */}
       {/* Discount Modal for Landscape */}
       {renderDiscountModal()}
 

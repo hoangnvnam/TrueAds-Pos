@@ -1,15 +1,13 @@
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStaticNavigation, StaticParamList, useFocusEffect } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
-import { Image } from 'react-native';
 import salesIcon from '~/assets/icons/cart.png';
 import reportsIcon from '~/assets/icons/chart.png';
 import settingsIcon from '~/assets/icons/menu.png';
 import inventoryIcon from '~/assets/icons/order.png';
+import { AdaptiveTabNavigator } from '~/components/AdaptiveTabNavigator';
 import { NotificationHandler } from '~/components/NotificationHandler';
 import { useSidebar } from '~/contexts/SidebarContext';
-import { useTheme } from '~/hooks/useTheme';
 import { Layout } from '../components/Layout';
 import { PrivateRoute } from '../components/PrivateRoute';
 import { PublicRoute } from '../components/PublicRoute';
@@ -41,82 +39,16 @@ const tabs = [
     routeName: 'POSSettings',
   },
 ];
-// Component wrapper cho mỗi tab
-const TabScreenWrapper = React.memo(({ routeName, navigation }: { routeName: string; navigation: any }) => {
-  const { closeFilter, closeSidebar } = useSidebar();
-  useFocusEffect(
-    React.useCallback(() => {
-      return () => {
-        closeFilter();
-        closeSidebar();
-      };
-    }, [closeFilter, closeSidebar]),
-  );
-
-  const Component = privateRoutes.find((r) => r.name === routeName)?.component;
-  return (
-    <PrivateRoute>
-      <Layout
-        layout={privateRoutes.find((r) => r.name === routeName)?.layout}
-        back={routeName === 'HomeTabs' ? false : true}
-      >
-        {Component && <Component navigation={navigation} />}
-        <NotificationHandler />
-      </Layout>
-    </PrivateRoute>
-  );
-});
-
-// Sử dụng hook useTheme để lấy theme hiện tại
-const BottomTabNavigator = () => {
-  const theme = useTheme();
-  const Tab = createBottomTabNavigator();
-
-  return (
-    <Tab.Navigator
-      initialRouteName="Home"
-      screenOptions={{
-        lazy: true,
-        tabBarStyle: {
-          backgroundColor: theme.colors.tabBar,
-          borderTopWidth: 1,
-          borderTopColor: theme.colors.border,
-        },
-        tabBarActiveTintColor: theme.colors.primary,
-      }}
-    >
-      {tabs.map((tab) => (
-        <Tab.Screen
-          key={tab.name}
-          name={tab.name}
-          options={{
-            headerShown: false,
-            title: tab.title,
-            tabBarIcon: ({ color, size }: { color: string; size: number }) => (
-              <Image
-                source={tab.icon}
-                tintColor={color}
-                style={{
-                  width: size,
-                  height: size,
-                }}
-                resizeMode="contain"
-              />
-            ),
-          }}
-        >
-          {(props) => <TabScreenWrapper routeName={tab.routeName} {...props} />}
-        </Tab.Screen>
-      ))}
-    </Tab.Navigator>
-  );
+// Sử dụng AdaptiveTabNavigator thay vì BottomTabNavigator
+const MainTabNavigator = (props: any) => {
+  return <AdaptiveTabNavigator tabs={tabs} initialRouteName="Home" navigation={props.navigation} />;
 };
 
 const RootStack = createNativeStackNavigator({
   initialRouteName: 'Login',
   screens: {
     HomeTabs: {
-      screen: BottomTabNavigator,
+      screen: MainTabNavigator,
       options: {
         headerShown: false,
       },
