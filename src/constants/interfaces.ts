@@ -59,6 +59,29 @@ export interface OrderDiscount {
   amount: number;
 }
 
+export interface OrderPromotion {
+  code: string;
+  name: string;
+  type: 'percentage' | 'fixed';
+  value: number;
+  amount: number;
+}
+
+export interface OrderItem extends CartItem {
+  // OrderItem is the same as CartItem but in the context of an order
+}
+
+export interface Order {
+  id: string;
+  name: string;
+  orderNumber: number;
+  items: OrderItem[];
+  orderDiscount: OrderDiscount | null;
+  orderPromotion: OrderPromotion | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface Promotion {
   code: string;
   name: string;

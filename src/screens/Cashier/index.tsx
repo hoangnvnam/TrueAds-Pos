@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, FlatList, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import BottomSheetModal from '~/components/BottomSheetModal';
 import { Icon } from '~/components/Icon';
@@ -6,7 +6,10 @@ import { Image } from '~/components/Image';
 import {
   CartItem,
   Category,
+  Order,
   OrderDiscount,
+  OrderItem,
+  OrderPromotion,
   ProcessedCategory,
   Product,
   ProductCategory,
@@ -21,16 +24,21 @@ import { formatCurrency } from '~/utils/format';
 import { useCashierStyles } from './styles';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+// Global storage for orders to persist across re-mounts
+let globalOrdersStorage: Order[] = [];
+let globalActiveOrderId: string | null = null;
+let globalOrderCounter: number = 1;
+
 export function Cashier() {
   const theme = useTheme();
   const { styles } = useCashierStyles();
   const { settings, isLoaded, updateProductViewMode, updateViewMode, updateAutoPrint } = useCashierSettings();
   const { isLandscape } = useOrientation();
 
-  // Multi-order state
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
-  const [orderCounter, setOrderCounter] = useState(1); // Track highest order number
+  // Multi-order state - Initialize from global storage
+  const [orders, setOrders] = useState<Order[]>(() => globalOrdersStorage);
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(() => globalActiveOrderId);
+  const [orderCounter, setOrderCounter] = useState(() => globalOrderCounter);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<number | 'all'>('all');
@@ -65,15 +73,25 @@ export function Cashier() {
   // Helper function to get current order promotion
   const orderPromotion = getCurrentOrder()?.orderPromotion || null;
 
-  // Initialize with first order and setup orderCounter
+  // Sync local state with global storage
+  useEffect(() => {
+    globalOrdersStorage = orders;
+  }, [orders]);
+
+  useEffect(() => {
+    globalActiveOrderId = activeOrderId;
+  }, [activeOrderId]);
+
+  useEffect(() => {
+    globalOrderCounter = orderCounter;
+  }, [orderCounter]);
+
   useEffect(() => {
     if (orders.length === 0) {
-      // Create first order when app starts
       createNewOrder();
     }
-  }, []);
+  }, [orders.length]);
 
-  // Update orderCounter when orders change (for restoration scenarios)
   useEffect(() => {
     if (orders.length > 0) {
       const maxOrderNumber = Math.max(...orders.map((order) => order.orderNumber || 0));
@@ -126,7 +144,6 @@ export function Cashier() {
     }
 
     const orderToDelete = orders.find((order) => order.id === orderId);
-    console.log(`Deleting order: ${orderToDelete?.name} (Number: ${orderToDelete?.orderNumber})`);
 
     setOrders((prev) => {
       const newOrders = prev.filter((order) => order.id !== orderId);
@@ -141,7 +158,6 @@ export function Cashier() {
     });
   };
 
-  // Function to switch active order
   const switchToOrder = (orderId: string) => {
     setActiveOrderId(orderId);
   };
@@ -150,7 +166,6 @@ export function Cashier() {
   const productViewMode = settings.productViewMode;
   const autoPrint = settings.autoPrint;
 
-  // Close cart bottom sheet when switching to split mode
   useEffect(() => {
     if (viewMode === 'split') {
       setCartBottomSheetVisible(false);
@@ -1806,17 +1821,19 @@ export function Cashier() {
         {viewMode === 'fullscreen' && (
           <>
             {/* Floating Cart Button */}
-            <TouchableOpacity
-              style={[styles.floatingCartButton, { backgroundColor: theme.colors.primary }]}
-              onPress={() => setCartBottomSheetVisible(true)}
-            >
-              <Icon name="shopping-basket" size={24} color="#fff" />
-              {cart.length > 0 && (
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            {!cartBottomSheetVisible && (
+              <TouchableOpacity
+                style={[styles.floatingCartButton, { backgroundColor: theme.colors.primary }]}
+                onPress={() => setCartBottomSheetVisible(true)}
+              >
+                <Icon name="shopping-basket" size={24} color="#fff" />
+                {cart.length > 0 && (
+                  <View style={styles.cartBadge}>
+                    <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
 
             {/* Cart BottomSheet */}
             {renderCartBottomSheet()}
@@ -2011,17 +2028,19 @@ export function Cashier() {
       {/* Floating Cart Button for fullscreen mode */}
       {viewMode === 'fullscreen' && (
         <>
-          <TouchableOpacity
-            style={[styles.floatingCartButton, { backgroundColor: theme.colors.primary }]}
-            onPress={() => setCartBottomSheetVisible(true)}
-          >
-            <Icon name="shopping-basket" size={24} color="#fff" />
-            {cart.length > 0 && (
-              <View style={styles.cartBadge}>
-                <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          {!cartBottomSheetVisible && (
+            <TouchableOpacity
+              style={[styles.floatingCartButton, { backgroundColor: theme.colors.primary }]}
+              onPress={() => setCartBottomSheetVisible(true)}
+            >
+              <Icon name="shopping-basket" size={24} color="#fff" />
+              {cart.length > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
 
           {/* Cart BottomSheet for fullscreen mode */}
           {renderCartBottomSheet()}
