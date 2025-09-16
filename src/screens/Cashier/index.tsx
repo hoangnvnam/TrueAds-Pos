@@ -1,16 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Alert,
-  Dimensions,
-  FlatList,
-  Modal,
-  ScrollView,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, FlatList, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import BottomSheetModal from '~/components/BottomSheetModal';
 import { Icon } from '~/components/Icon';
 import { Image } from '~/components/Image';
@@ -25,6 +14,7 @@ import {
 } from '~/constants/interfaces';
 import { useFetchData } from '~/hooks/useApi';
 import { useCashierSettings } from '~/hooks/useCashierSettings';
+import { useOrientation } from '~/hooks/useOrientation';
 import { useTheme } from '~/hooks/useTheme';
 import { toastInfo, toastSuccess, toastWarning } from '~/hooks/useToast';
 import { formatCurrency } from '~/utils/format';
@@ -35,6 +25,7 @@ export function Cashier() {
   const theme = useTheme();
   const { styles } = useCashierStyles();
   const { settings, isLoaded, updateProductViewMode, updateViewMode, updateAutoPrint } = useCashierSettings();
+  const { isLandscape } = useOrientation();
 
   // Multi-order state
   const [orders, setOrders] = useState<Order[]>([]);
@@ -43,7 +34,6 @@ export function Cashier() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<number | 'all'>('all');
-  const [screenData, setScreenData] = useState(Dimensions.get('window'));
   const [discountModalVisible, setDiscountModalVisible] = useState(false);
   const [selectedItemForDiscount, setSelectedItemForDiscount] = useState<string | null>(null);
   const [discountCode, setDiscountCode] = useState('');
@@ -52,7 +42,6 @@ export function Cashier() {
   const [manualDiscountType, setManualDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [manualDiscountValue, setManualDiscountValue] = useState('');
   const [cartBottomSheetVisible, setCartBottomSheetVisible] = useState(false);
-  const [orientationChangeTimeout, setOrientationChangeTimeout] = useState<NodeJS.Timeout | null>(null);
 
   // Modal states for order-level discount/promotion
   const [footerCollapsed, setFooterCollapsed] = useState(false);
@@ -161,6 +150,13 @@ export function Cashier() {
   const productViewMode = settings.productViewMode;
   const autoPrint = settings.autoPrint;
 
+  // Close cart bottom sheet when switching to split mode
+  useEffect(() => {
+    if (viewMode === 'split') {
+      setCartBottomSheetVisible(false);
+    }
+  }, [viewMode]);
+
   const discountCodes = {
     SAVE10: { percent: 10, name: 'Giảm 10%' },
     SAVE20: { percent: 20, name: 'Giảm 20%' },
@@ -208,29 +204,6 @@ export function Cashier() {
 
     return [allCategory, ...apiCategories];
   }, [categories?.data]);
-
-  useEffect(() => {
-    const subscription = Dimensions.addEventListener('change', ({ window }) => {
-      if (orientationChangeTimeout) {
-        clearTimeout(orientationChangeTimeout);
-      }
-
-      const timeout = setTimeout(() => {
-        setScreenData(window);
-      }, 150);
-
-      setOrientationChangeTimeout(timeout);
-    });
-
-    return () => {
-      subscription?.remove();
-      if (orientationChangeTimeout) {
-        clearTimeout(orientationChangeTimeout);
-      }
-    };
-  }, [orientationChangeTimeout]);
-
-  const isLandscape = screenData.width > screenData.height + 50;
 
   const filteredProducts = dataProducts?.data?.filter((product: any) => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -1833,19 +1806,17 @@ export function Cashier() {
         {viewMode === 'fullscreen' && (
           <>
             {/* Floating Cart Button */}
-            {!cartBottomSheetVisible && (
-              <TouchableOpacity
-                style={[styles.floatingCartButton, { backgroundColor: theme.colors.primary }]}
-                onPress={() => setCartBottomSheetVisible(true)}
-              >
-                <Icon name="shopping-basket" size={24} color="#fff" />
-                {cart.length > 0 && (
-                  <View style={styles.cartBadge}>
-                    <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={[styles.floatingCartButton, { backgroundColor: theme.colors.primary }]}
+              onPress={() => setCartBottomSheetVisible(true)}
+            >
+              <Icon name="shopping-basket" size={24} color="#fff" />
+              {cart.length > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
             {/* Cart BottomSheet */}
             {renderCartBottomSheet()}
@@ -2040,19 +2011,17 @@ export function Cashier() {
       {/* Floating Cart Button for fullscreen mode */}
       {viewMode === 'fullscreen' && (
         <>
-          {!cartBottomSheetVisible && (
-            <TouchableOpacity
-              style={[styles.floatingCartButton, { backgroundColor: theme.colors.primary }]}
-              onPress={() => setCartBottomSheetVisible(true)}
-            >
-              <Icon name="shopping-basket" size={24} color="#fff" />
-              {cart.length > 0 && (
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[styles.floatingCartButton, { backgroundColor: theme.colors.primary }]}
+            onPress={() => setCartBottomSheetVisible(true)}
+          >
+            <Icon name="shopping-basket" size={24} color="#fff" />
+            {cart.length > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
           {/* Cart BottomSheet for fullscreen mode */}
           {renderCartBottomSheet()}
