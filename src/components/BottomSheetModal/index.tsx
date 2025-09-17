@@ -5,6 +5,7 @@ import { DIMENSIONS } from '~/constants/dimensions';
 import { useComponentStyles } from '~/hooks/useComponentStyles';
 import { useTheme } from '~/hooks/useTheme';
 import { Icon } from '../Icon';
+import { ScrollView } from 'react-native-gesture-handler';
 interface BottomSheetModalProps {
   isVisible: boolean;
   onClose: () => void;
@@ -14,12 +15,14 @@ interface BottomSheetModalProps {
   data?: any[];
   renderItem?: ListRenderItem<any>;
   ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
+  ListFotterComponent?: React.ComponentType<any> | React.ReactElement | null;
   ListEmptyComponent?: React.ComponentType<any> | React.ReactElement | null;
   numColumns?: number;
   keyExtractor?: (item: any, index: number) => string;
   contentContainerStyle?: any;
   renderFooter?: () => React.ReactNode;
   paddingHorizontal?: number;
+  scrollEnabled?: boolean;
 }
 
 const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
@@ -31,18 +34,20 @@ const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
   data,
   renderItem,
   ListHeaderComponent,
+  ListFotterComponent,
   ListEmptyComponent,
   numColumns,
   keyExtractor,
   contentContainerStyle,
   renderFooter,
   paddingHorizontal = 20,
+  scrollEnabled,
 }) => {
   const { styles } = useBottomSheetModalStyles();
   const bottomSheetRef = useRef<BottomSheet>(null);
   const theme = useTheme();
 
-  const snapPoints = useMemo(() => ['30%', '50%', '70%', '90%', '100%'], []);
+  const snapPoints = useMemo(() => (!scrollEnabled ? ['30%', '50%', '70%', '90%', '100%'] : ['90%', '100%']), []);
 
   const handleSheetChanges = useCallback(
     (index: number) => {
@@ -72,6 +77,7 @@ const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
       </View>
     );
   };
+  const ViewCustom = scrollEnabled ? ScrollView : View;
   return (
     <BottomSheet
       ref={bottomSheetRef}
@@ -88,7 +94,7 @@ const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
       <TouchableOpacity style={styles.closeButton} onPress={onClose}>
         <Icon name="close-circle" type="ionicons" size={24} />
       </TouchableOpacity>
-      <View style={[styles.contentContainer, { marginHorizontal: paddingHorizontal }]}>
+      <ViewCustom style={[styles.contentContainer, { marginHorizontal: paddingHorizontal }]}>
         {componentView === 'BottomSheetView' ? (
           <BottomSheetView style={styles.listContainer}>{children}</BottomSheetView>
         ) : (
@@ -97,14 +103,15 @@ const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
             keyExtractor={keyExtractor || ((_, index) => index.toString())}
             renderItem={renderItem}
             ListHeaderComponent={ListHeaderComponent}
+            ListFooterComponent={ListFotterComponent}
             numColumns={numColumns}
             contentContainerStyle={[styles.listContainer, contentContainerStyle]}
-            scrollEnabled={true}
+            scrollEnabled={scrollEnabled ? false : true}
             ListEmptyComponent={ListEmptyComponent || DefaultListEmptyComponent}
           />
         )}
         {renderFooter && renderFooter()}
-      </View>
+      </ViewCustom>
     </BottomSheet>
   );
 };

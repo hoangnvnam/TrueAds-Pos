@@ -23,14 +23,15 @@ export function useCashierStyles() {
     leftPanel: {
       height: DIMENSIONS.SCREEN_HEIGHT,
       flex: 2,
-      padding: 16,
+      paddingVertical: 16,
+      paddingHorizontal: 8,
       borderRadius: 12,
-      marginRight: 8,
       shadowColor: '#000',
     },
     rightPanel: {
       flex: 1,
-      padding: 16,
+      paddingVertical: 16,
+      paddingHorizontal: 8,
       borderRadius: 12,
     },
 
@@ -98,7 +99,7 @@ export function useCashierStyles() {
     categoryContainer: {
       paddingTop: 4,
       paddingBottom: 16,
-      paddingHorizontal: 16,
+      paddingHorizontal: 8,
     },
     categoryButton: {
       paddingHorizontal: 18,
@@ -406,6 +407,7 @@ export function useCashierStyles() {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
+      paddingVertical: 20,
     },
     emptyCartText: {
       color: theme.colors.text,

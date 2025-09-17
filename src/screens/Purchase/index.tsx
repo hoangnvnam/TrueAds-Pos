@@ -16,17 +16,12 @@ import {
 import { axiosParent } from '~/configs/axios';
 import { useAuth } from '~/contexts/AuthContext';
 import { useInitData } from '~/contexts/InitData';
-const productIds = [
-  'social_chat_small_6_months',
-  'social_chat_small_12_months',
-  'social_chat_standard_6_months',
-  'social_chat_business_6_months',
-];
+const productIds = ['pos_basic', 'pos_standard', 'pos_business'];
 
 // Dữ liệu gói đăng ký để hiển thị
 const subscriptionData: any = {
-  social_chat_small_6_months: {
-    title: 'Social Chat Cơ Bản',
+  pos_basic: {
+    title: 'POS Cơ Bản',
     duration: '6 tháng',
     price: '₫719,000',
     features: ['Tính năng chat cơ bản', '1 trang', '3 nhân viên'],

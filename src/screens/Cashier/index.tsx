@@ -204,6 +204,25 @@ export function Cashier() {
       staleTime: 1000 * 60 * 60 * 24,
     },
   });
+  const { data: attributes, refresh: refreshAttributes } = useFetchData({
+    queryKey: ['attributesData'],
+    url: '/get',
+    action: 'get_all_product_attributes',
+    options: {
+      refetchOnWindowFocus: true,
+      refetchOnMount: true,
+      refetchOnReconnect: true,
+      refetchInterval: 1000 * 60 * 60 * 24,
+      staleTime: 1000 * 60 * 60 * 24,
+    },
+  });
+  console.log(
+    JSON.stringify(
+      dataProducts?.data.filter((p) => p?.variations && Array.isArray(p?.variations) && p?.variations.length > 0) || [],
+      null,
+      2,
+    ),
+  );
 
   const processedCategories: ProcessedCategory[] = React.useMemo(() => {
     if (!categories?.data) return [{ id: 'all', name: 'Tất cả' }];
@@ -886,7 +905,7 @@ export function Cashier() {
       <>
         {/* Order details when expanded */}
         <View style={styles.summaryRow}>
-          <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng gốc:</Text>
+          <Text style={[styles.summaryLabel, { color: theme.colors.text }]}>Tổng tiền:</Text>
           <Text style={[styles.summaryValue, { color: theme.colors.text }]}>{formatCurrency(getOriginalTotal())}</Text>
         </View>
 
@@ -1484,7 +1503,7 @@ export function Cashier() {
 
         {/* Total and Checkout Button - always visible */}
         <View style={styles.summaryRow}>
-          <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>Thành tiền:</Text>
+          <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>Khách phải trả:</Text>
           <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
             {formatCurrency(getFinalOrderTotal())}
           </Text>
@@ -1513,18 +1532,21 @@ export function Cashier() {
     );
 
     return (
-      <BottomSheetModal
-        isVisible={cartBottomSheetVisible}
-        onClose={() => setCartBottomSheetVisible(false)}
-        componentView="BottomSheetFlatList"
-        data={cart}
-        renderItem={renderCartItem}
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={renderCartHeader}
-        ListEmptyComponent={renderEmptyCart}
-        renderFooter={renderCartFooter}
-        firstPointIndex={4}
-      />
+      cartBottomSheetVisible && (
+        <BottomSheetModal
+          isVisible={cartBottomSheetVisible}
+          onClose={() => setCartBottomSheetVisible(false)}
+          componentView="BottomSheetFlatList"
+          data={cart}
+          renderItem={renderCartItem}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={renderCartHeader}
+          ListEmptyComponent={renderEmptyCart}
+          renderFooter={renderCartFooter}
+          firstPointIndex={1}
+          scrollEnabled
+        />
+      )
     );
   };
 
@@ -1982,7 +2004,7 @@ export function Cashier() {
                 {/* Total and Checkout Button - always visible */}
                 <View style={styles.summaryRow}>
                   <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>
-                    Thành tiền:
+                    Khách phải trả:
                   </Text>
                   <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
                     {formatCurrency(getFinalOrderTotal())}
@@ -2077,7 +2099,10 @@ export function Cashier() {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            style={!isLandscape ? styles.categoryContainer : { ...styles.categoryContainer, paddingBottom: 30 }}
+            style={[
+              !isLandscape ? styles.categoryContainer : { ...styles.categoryContainer, paddingBottom: 30 },
+              filteredProducts?.length === 0 && { maxHeight: 60 },
+            ]}
           >
             {processedCategories.map((category) => (
               <TouchableOpacity
@@ -2187,7 +2212,9 @@ export function Cashier() {
 
               {/* Total and Checkout Button - always visible */}
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>Thành tiền:</Text>
+                <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>
+                  Khách phải trả:
+                </Text>
                 <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
                   {formatCurrency(getFinalOrderTotal())}
                 </Text>

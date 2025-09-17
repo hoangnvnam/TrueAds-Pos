@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       showLoading();
       try {
-        await axiosParent.post('/logout', {
+        await axiosParent.post('/logout-pos', {
           expoToken: await AsyncStorage.getItem('expoPushToken'),
         });
       } catch (error) {

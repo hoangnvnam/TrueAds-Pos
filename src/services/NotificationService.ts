@@ -85,7 +85,7 @@ export async function registerForPushNotificationsAsync(userId: string) {
 
 async function registerDeviceOnServer(token: string, userId: string) {
   try {
-    const res = await axiosParent.post('/register-push-token', {
+    const res = await axiosParent.post('/register-push-token-pos', {
       token,
       userId,
       platform: Device.manufacturer + '_' + Device.modelName,
