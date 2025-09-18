@@ -59,6 +59,11 @@ export function Cashier() {
   const [orderDiscountValue, setOrderDiscountValue] = useState('');
   const [promotionCode, setPromotionCode] = useState('');
 
+  // Variation selection modal state
+  const [variationModalVisible, setVariationModalVisible] = useState(false);
+  const [productForVariation, setProductForVariation] = useState<Product | null>(null);
+  const [selectedVariations, setSelectedVariations] = useState<Record<string, string>>({});
+
   // Helper function to get current active order
   const getCurrentOrder = (): Order | null => {
     return orders.find((order) => order.id === activeOrderId) || null;
@@ -216,13 +221,20 @@ export function Cashier() {
       staleTime: 1000 * 60 * 60 * 24,
     },
   });
-  console.log(
-    JSON.stringify(
-      dataProducts?.data.filter((p) => p?.variations && Array.isArray(p?.variations) && p?.variations.length > 0) || [],
-      null,
-      2,
-    ),
-  );
+  const { data: userCashier, refresh: refreshUserCashier } = useFetchData({
+    queryKey: ['userCashierData'],
+    url: '/get',
+    action: 'get_users_cashier_api',
+    options: {
+      refetchOnWindowFocus: true,
+      refetchOnMount: true,
+      refetchOnReconnect: true,
+      refetchInterval: 1000 * 60 * 60 * 24,
+      staleTime: 1000 * 60 * 60 * 24,
+    },
+  });
+  // refreshUserCashier();
+  console.log(JSON.stringify(userCashier, null, 2));
 
   const processedCategories: ProcessedCategory[] = React.useMemo(() => {
     if (!categories?.data) return [{ id: 'all', name: 'Tất cả' }];
@@ -254,24 +266,38 @@ export function Cashier() {
     return matchesSearch && matchesCategory;
   });
 
-  // Add product to cart or increase quantity if already exists
+  // Add product to cart; if variable, open variation selection first
   const addToCart = (product: Product) => {
     if (!activeOrderId) return;
+    // If variable product -> open picker modal
+    if (product.type === 'variable' && product.variations && product.variations.length > 0) {
+      setProductForVariation(product);
+      // Prefill default attributes if any
+      const defaults: Record<string, string> = {};
+      product.default_attributes?.forEach((d) => {
+        if (d.slug && d.option) defaults[d.slug] = d.option;
+      });
+      setSelectedVariations(defaults);
+      setVariationModalVisible(true);
+      return;
+    }
 
+    // Simple product flow: increase if exists, else add new
     setOrders((prevOrders) =>
       prevOrders.map((order) => {
         if (order.id !== activeOrderId) return order;
 
-        const existingItem = order.items.find((item) => item.id === product.id);
+        const existingItem = order.items.find((item) => item.id === product.id && !item.variantId);
         let updatedItems;
 
         if (existingItem) {
+          const newQty = existingItem.quantity + 1;
           updatedItems = order.items.map((item) =>
-            item.id === product.id
+            item === existingItem
               ? {
                   ...item,
-                  quantity: item.quantity + 1,
-                  finalPrice: calculateFinalPrice(item.price, item.discountPercent) * (item.quantity + 1),
+                  quantity: newQty,
+                  finalPrice: calculateFinalPrice(item.price, item.discountPercent) * newQty,
                 }
               : item,
           );
@@ -289,6 +315,54 @@ export function Cashier() {
           items: updatedItems,
           updatedAt: new Date(),
         };
+      }),
+    );
+  };
+
+  const addSelectedVariantToCart = (product: Product, variationId: number, selectedAttrs: Record<string, string>) => {
+    if (!activeOrderId) return;
+    const variation = product.variations?.find((v) => v.id === variationId);
+    if (!variation) return;
+
+    const variantPrice = Number(variation.price || product.price || 0);
+    const lineId = `${product.id}:${variationId}`;
+
+    setOrders((prevOrders) =>
+      prevOrders.map((order) => {
+        if (order.id !== activeOrderId) return order;
+
+        // Identify existing cart line by composite line id
+        const existingItem = order.items.find((item) => item.id === lineId);
+
+        let updatedItems: OrderItem[];
+        if (existingItem) {
+          const newQty = existingItem.quantity + 1;
+          updatedItems = order.items.map((item) =>
+            item === existingItem
+              ? {
+                  ...item,
+                  quantity: newQty,
+                  finalPrice: calculateFinalPrice(item.price, item.discountPercent) * newQty,
+                }
+              : item,
+          );
+        } else {
+          const newItem: OrderItem = {
+            ...product,
+            id: lineId,
+            price: variantPrice,
+            variantId: String(variationId),
+            selectedAttributes: selectedAttrs,
+            variantImage: variation.image || product.img_url,
+            stock_quantity: variation.stock_quantity ?? product.stock_quantity ?? null,
+            stock_status: variation.stock_status ?? product.stock_status ?? null,
+            quantity: 1,
+            finalPrice: variantPrice,
+          } as OrderItem;
+          updatedItems = [...order.items, newItem];
+        }
+
+        return { ...order, items: updatedItems, updatedAt: new Date() };
       }),
     );
   };
@@ -323,8 +397,16 @@ export function Cashier() {
       return;
     }
 
-    const product = dataProducts?.data?.find((p: any) => p.id === productId);
-    const maxStock = product?.stock_quantity || 999;
+    // Find corresponding item in current cart to respect variant stock
+    const order = getCurrentOrder();
+    const cartItem = order?.items.find((i) => i.id === productId);
+    let maxStock = 999;
+    if (cartItem) {
+      maxStock = cartItem.stock_quantity ?? 999;
+    } else {
+      const product = dataProducts?.data?.find((p: any) => p.id === productId);
+      maxStock = product?.stock_quantity ?? 999;
+    }
 
     if (quantity > maxStock) {
       toastWarning(`Số lượng không được vượt quá ${maxStock}`);
@@ -1550,6 +1632,247 @@ export function Cashier() {
     );
   };
 
+  // Variation Picker Modal
+  const renderVariationModal = React.useCallback(() => {
+    if (!variationModalVisible || !productForVariation) return null;
+
+    // Attributes used for variation
+    const attrs = productForVariation.attributes?.filter((a) => a.variation) || [];
+
+    const getTermsFromGlobal = (slug: string) => {
+      const globalAttr = attributes?.data?.find((a: any) => a.slug === slug);
+      return globalAttr?.terms || [];
+    };
+
+    // Build selected slug map for already chosen attributes
+    const selectedBySlug: Record<string, string> = {};
+    attrs.forEach((a) => {
+      const human = selectedVariations[a.slug];
+      if (!human) return;
+      const terms = getTermsFromGlobal(a.slug);
+      const term = terms.find((t: any) => t.name === human);
+      const slugVal = term?.slug || human.toString().toLowerCase().replace(/\s+/g, '-');
+      selectedBySlug[a.slug] = slugVal;
+    });
+
+    const allSelected = attrs.every((a) => !!selectedVariations[a.slug]);
+
+    // Try to find matching variation when user has selected all attributes
+    const matchingVariation = allSelected
+      ? productForVariation.variations?.find((v) =>
+          attrs.every((a) => v.attributes?.[a.slug] === selectedBySlug[a.slug]),
+        )
+      : null;
+
+    const onConfirm = () => {
+      if (!allSelected) {
+        Alert.alert('Thông báo', 'Vui lòng chọn đầy đủ thuộc tính');
+        return;
+      }
+      if (!matchingVariation) {
+        Alert.alert('Không tìm thấy biến thể', 'Tổ hợp thuộc tính không có sẵn. Vui lòng chọn lại.');
+        return;
+      }
+      addSelectedVariantToCart(productForVariation, matchingVariation.id, selectedVariations);
+      setVariationModalVisible(false);
+      setProductForVariation(null);
+      setSelectedVariations({});
+    };
+
+    return (
+      <Modal
+        transparent
+        visible={variationModalVisible}
+        animationType="fade"
+        onRequestClose={() => setVariationModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContainer,
+              {
+                maxHeight: '85%',
+                paddingBottom: 20,
+                paddingTop: 20,
+              },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: theme.colors.text, marginBottom: 12 }]}>Chọn biến thể</Text>
+
+            {/* Preview box */}
+            <View
+              style={{
+                flexDirection: 'row',
+                padding: 12,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.cardBackground,
+                marginBottom: 16,
+              }}
+            >
+              <View
+                style={{
+                  width: 70,
+                  height: 70,
+                  borderRadius: 10,
+                  overflow: 'hidden',
+                  backgroundColor: theme.colors.background,
+                  marginRight: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Image
+                  source={
+                    matchingVariation?.image ||
+                    productForVariation.img_url ||
+                    productForVariation.images?.[0]?.src ||
+                    ''
+                  }
+                  style={{ width: 70, height: 70 }}
+                  resizeMode="cover"
+                />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    color: theme.colors.text,
+                    fontSize: 15,
+                    fontWeight: '600',
+                    marginBottom: 4,
+                  }}
+                  numberOfLines={2}
+                >
+                  {productForVariation.name}
+                </Text>
+                <Text
+                  style={{
+                    color: theme.colors.text,
+                    fontSize: 12,
+                    opacity: 0.75,
+                    marginBottom: 6,
+                  }}
+                  numberOfLines={2}
+                >
+                  {Object.values(selectedVariations).length > 0
+                    ? Object.values(selectedVariations).join(' • ')
+                    : 'Chọn thuộc tính để xem giá'}
+                </Text>
+                <Text
+                  style={{
+                    color: matchingVariation ? theme.colors.primary : theme.colors.text,
+                    fontSize: 16,
+                    fontWeight: '700',
+                  }}
+                >
+                  {matchingVariation
+                    ? formatCurrency(Number(matchingVariation.price || productForVariation.price || 0))
+                    : '—'}
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView style={[styles.modalScrollView, { paddingTop: 4 }]} showsVerticalScrollIndicator={false}>
+              {attrs.map((a) => {
+                const terms = getTermsFromGlobal(a.slug);
+                const options = terms.length > 0 ? terms.map((t: any) => t.name) : a.options;
+                const current = selectedVariations[a.slug];
+                return (
+                  <View key={a.slug} style={{ marginBottom: 18 }}>
+                    <Text style={{ color: theme.colors.text, marginBottom: 10, fontWeight: '500', fontSize: 14 }}>
+                      {a.name}
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 }}>
+                      {options.map((opt: string) => {
+                        const selected = current === opt;
+                        return (
+                          <TouchableOpacity
+                            key={opt}
+                            onPress={() =>
+                              setSelectedVariations((prev) => {
+                                const next = { ...prev } as Record<string, string>;
+                                if (next[a.slug] === opt) {
+                                  delete next[a.slug];
+                                } else {
+                                  next[a.slug] = opt;
+                                }
+                                return next;
+                              })
+                            }
+                            style={{
+                              paddingVertical: 10,
+                              paddingHorizontal: 14,
+                              borderRadius: 22,
+                              borderWidth: 1,
+                              margin: 4,
+                              minHeight: 40,
+                              justifyContent: 'center',
+                              borderColor: selected ? theme.colors.primary : theme.colors.border,
+                              backgroundColor: selected ? theme.colors.primary : theme.colors.cardBackground,
+                              shadowColor: '#000',
+                              shadowOpacity: selected ? 0.25 : 0,
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowRadius: 4,
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text
+                              style={{
+                                color: selected ? '#fff' : theme.colors.text,
+                                fontWeight: '500',
+                                fontSize: 13,
+                              }}
+                            >
+                              {opt}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setVariationModalVisible(false);
+                  setProductForVariation(null);
+                  setSelectedVariations({});
+                }}
+                style={[styles.modalCancelButton, { flex: 1, backgroundColor: theme.colors.border, borderRadius: 14 }]}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.modalCancelButtonText, { color: theme.colors.text, fontWeight: '500' }]}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={onConfirm}
+                disabled={!allSelected || !matchingVariation}
+                style={[
+                  styles.modalApplyButton,
+                  {
+                    flex: 1,
+                    borderRadius: 14,
+                    backgroundColor: theme.colors.primary,
+                    opacity: !allSelected || !matchingVariation ? 0.5 : 1,
+                  },
+                ]}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.modalApplyButtonText, { fontWeight: '700' }]}>
+                  {matchingVariation ? 'Thêm vào giỏ' : allSelected ? 'Không có biến thể' : 'Chọn thuộc tính'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }, [variationModalVisible, productForVariation, selectedVariations, attributes?.data, theme.colors, formatCurrency]);
+
   // Process checkout and reset current order
   const handleCheckout = () => {
     if (!activeOrderId || cart.length === 0) return;
@@ -1759,6 +2082,12 @@ export function Cashier() {
       >
         <View style={styles.cartItemInfo}>
           <Text style={[styles.cartItemName, { color: theme.colors.text }]}>{item.name}</Text>
+
+          {item.selectedAttributes && (
+            <Text style={{ color: theme.colors.text, opacity: 0.7, marginTop: 4, fontSize: 12 }}>
+              {Object.values(item.selectedAttributes).join(' • ')}
+            </Text>
+          )}
 
           {/* Price Display */}
           <View style={styles.priceContainer}>
@@ -2030,6 +2359,9 @@ export function Cashier() {
 
         {/* Promotion Modal */}
         {renderPromotionModal()}
+
+        {/* Variation Modal */}
+        {renderVariationModal()}
       </SafeAreaView>
     );
   }
@@ -2170,7 +2502,7 @@ export function Cashier() {
             <View style={styles.header}>
               <Text style={[styles.title, { color: theme.colors.text }]}>{getCurrentOrder()?.name || 'Giỏ hàng'}</Text>
               <View style={styles.cartItemsBadgeLarge}>
-                <Text style={styles.cartItemsBadgeTextLarge}>{getTotalItems()}</Text>
+                <Text style={styles.cartItemsBadgeText}>{getTotalItems()}</Text>
               </View>
             </View>
 
@@ -2243,6 +2575,9 @@ export function Cashier() {
 
       {/* Promotion Modal */}
       {renderPromotionModal()}
+
+      {/* Variation Modal */}
+      {renderVariationModal()}
     </SafeAreaView>
   );
 }

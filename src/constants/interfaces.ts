@@ -40,6 +40,36 @@ export interface Product {
   stock_status: string | null;
   img_url?: string;
   images?: any;
+  // WooCommerce specific (optional) fields
+  type?: 'simple' | 'variable' | string;
+  attributes?: Array<{
+    id: number;
+    name: string;
+    slug: string; // e.g., pa_kich-thuoc
+    position: number;
+    visible: boolean;
+    variation: boolean;
+    options: string[]; // human-readable option names
+  }>;
+  default_attributes?: Array<{
+    id?: number;
+    name?: string;
+    slug?: string; // e.g., pa_kich-thuoc
+    option?: string; // human-readable option name
+  }>;
+  variations?: Array<{
+    id: number;
+    image?: string;
+    sku?: string;
+    price: string; // raw from API, convert to number when used
+    regular_price?: string;
+    sale_price?: string;
+    attributes: Record<string, string>; // { 'pa_kich-thuoc': 'lon' }
+    stock_quantity: number | null;
+    stock_status: string | null;
+    product_name?: string;
+    enabled?: boolean;
+  }>;
 }
 
 export interface CartItem extends Product {
@@ -51,6 +81,10 @@ export interface CartItem extends Product {
   manualDiscountType?: 'percentage' | 'fixed';
   manualDiscountValue?: number;
   isManualDiscount?: boolean;
+  // Variant specific metadata (optional)
+  variantId?: string; // variation id if item is a variant
+  selectedAttributes?: Record<string, string>; // { 'pa_kich-thuoc': 'Lớn' }
+  variantImage?: string;
 }
 
 export interface OrderDiscount {
