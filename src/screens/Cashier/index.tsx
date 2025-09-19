@@ -75,6 +75,17 @@ export function Cashier() {
   const [productForVariation, setProductForVariation] = useState<Product | null>(null);
   const [selectedVariations, setSelectedVariations] = useState<Record<string, string>>({});
 
+  // Quick add product modal state
+  const [quickAddModalVisible, setQuickAddModalVisible] = useState(false);
+  const [quickAddData, setQuickAddData] = useState({
+    name: '',
+    sku: '',
+    regularPrice: '',
+    salePrice: '',
+    manageStock: false,
+    stockQuantity: '',
+  });
+
   // Helper function to get current active order
   const getCurrentOrder = (): Order | null => {
     return orders.find((order) => order.id === activeOrderId) || null;
@@ -1882,6 +1893,271 @@ export function Cashier() {
     );
   }, [variationModalVisible, productForVariation, selectedVariations, attributes?.data, theme.colors, formatCurrency]);
 
+  // Reset quick add form
+  const resetQuickAddForm = () => {
+    setQuickAddData({
+      name: '',
+      sku: '',
+      regularPrice: '',
+      salePrice: '',
+      manageStock: false,
+      stockQuantity: '',
+    });
+  };
+
+  // Handle quick add product
+  const handleQuickAddProduct = () => {
+    // Validate required fields
+    if (!quickAddData.name.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập tên sản phẩm');
+      return;
+    }
+
+    if (!quickAddData.regularPrice.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập giá bán thường');
+      return;
+    }
+
+    const regularPrice = parseFloat(quickAddData.regularPrice);
+    if (isNaN(regularPrice) || regularPrice <= 0) {
+      Alert.alert('Lỗi', 'Giá bán thường phải là số dương');
+      return;
+    }
+
+    const salePrice = quickAddData.salePrice.trim() ? parseFloat(quickAddData.salePrice) : null;
+    if (salePrice !== null && (isNaN(salePrice) || salePrice < 0)) {
+      Alert.alert('Lỗi', 'Giá khuyến mãi phải là số không âm');
+      return;
+    }
+
+    if (salePrice !== null && salePrice >= regularPrice) {
+      Alert.alert('Lỗi', 'Giá khuyến mãi phải nhỏ hơn giá bán thường');
+      return;
+    }
+
+    const stockQuantity = quickAddData.manageStock ? parseInt(quickAddData.stockQuantity) : null;
+    if (quickAddData.manageStock && (isNaN(stockQuantity!) || stockQuantity! < 0)) {
+      Alert.alert('Lỗi', 'Số lượng tồn kho phải là số không âm');
+      return;
+    }
+
+    // Create temporary product object
+    const newProduct: Product = {
+      id: `temp_${Date.now()}`,
+      name: quickAddData.name.trim(),
+      price: salePrice || regularPrice,
+      stock_quantity: stockQuantity || 999,
+      stock_status: quickAddData.manageStock ? (stockQuantity! > 0 ? 'instock' : 'outofstock') : 'instock',
+      img_url: '',
+      images: [],
+      type: 'simple',
+      categories: [],
+      attributes: [],
+      variations: [],
+    };
+
+    // Add to cart
+    addToCart(newProduct);
+
+    // Show success message
+    toastSuccess(`Đã thêm "${newProduct.name}" vào giỏ hàng`);
+
+    // Close modal and reset form
+    setQuickAddModalVisible(false);
+    resetQuickAddForm();
+  };
+
+  // Render Quick Add Product Modal
+  const renderQuickAddModal = React.useCallback(() => {
+    return (
+      <Modal
+        visible={quickAddModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setQuickAddModalVisible(false);
+          resetQuickAddForm();
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { maxHeight: '90%' }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Thêm sản phẩm</Text>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollView}>
+              {/* Product Name */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: theme.colors.text, marginBottom: 8, fontWeight: '500' }}>
+                  Tên sản phẩm <Text style={{ color: '#ff4444' }}>*</Text>
+                </Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    fontSize: 16,
+                    color: theme.colors.text,
+                    backgroundColor: theme.colors.background,
+                  }}
+                  placeholder="Nhập tên sản phẩm..."
+                  placeholderTextColor={theme.colors.text + '60'}
+                  value={quickAddData.name}
+                  onChangeText={(text) => setQuickAddData({ ...quickAddData, name: text })}
+                />
+              </View>
+
+              {/* SKU */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: theme.colors.text, marginBottom: 8, fontWeight: '500' }}>Mã SKU</Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    fontSize: 16,
+                    color: theme.colors.text,
+                    backgroundColor: theme.colors.background,
+                  }}
+                  placeholder="Nhập mã SKU (tự động tạo nếu để trống)"
+                  placeholderTextColor={theme.colors.text + '60'}
+                  value={quickAddData.sku}
+                  onChangeText={(text) => setQuickAddData({ ...quickAddData, sku: text })}
+                />
+              </View>
+
+              {/* Regular Price */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: theme.colors.text, marginBottom: 8, fontWeight: '500' }}>
+                  Giá bán thường <Text style={{ color: '#ff4444' }}>*</Text>
+                </Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    fontSize: 16,
+                    color: theme.colors.text,
+                    backgroundColor: theme.colors.background,
+                  }}
+                  placeholder="Nhập giá bán thường..."
+                  placeholderTextColor={theme.colors.text + '60'}
+                  value={quickAddData.regularPrice}
+                  onChangeText={(text) => setQuickAddData({ ...quickAddData, regularPrice: text })}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              {/* Sale Price */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: theme.colors.text, marginBottom: 8, fontWeight: '500' }}>Giá khuyến mãi</Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    fontSize: 16,
+                    color: theme.colors.text,
+                    backgroundColor: theme.colors.background,
+                  }}
+                  placeholder="Nhập giá khuyến mãi (tùy chọn)"
+                  placeholderTextColor={theme.colors.text + '60'}
+                  value={quickAddData.salePrice}
+                  onChangeText={(text) => setQuickAddData({ ...quickAddData, salePrice: text })}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              {/* Manage Stock Toggle */}
+              <View style={{ marginBottom: 16 }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text style={{ color: theme.colors.text, fontWeight: '500' }}>Quản lý tồn kho</Text>
+                  <Switch
+                    value={quickAddData.manageStock}
+                    onValueChange={(value) =>
+                      setQuickAddData({
+                        ...quickAddData,
+                        manageStock: value,
+                        stockQuantity: value ? quickAddData.stockQuantity : '',
+                      })
+                    }
+                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                    thumbColor={quickAddData.manageStock ? '#fff' : '#f4f3f4'}
+                    ios_backgroundColor={theme.colors.border}
+                  />
+                </View>
+
+                {quickAddData.manageStock && (
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: theme.colors.border,
+                      borderRadius: 12,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      fontSize: 16,
+                      color: theme.colors.text,
+                      backgroundColor: theme.colors.background,
+                    }}
+                    placeholder="Nhập số lượng tồn kho..."
+                    placeholderTextColor={theme.colors.text + '60'}
+                    value={quickAddData.stockQuantity}
+                    onChangeText={(text) => setQuickAddData({ ...quickAddData, stockQuantity: text })}
+                    keyboardType="numeric"
+                  />
+                )}
+              </View>
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setQuickAddModalVisible(false);
+                  resetQuickAddForm();
+                }}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  backgroundColor: theme.colors.border,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: theme.colors.text, fontWeight: '500' }}>Hủy</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleQuickAddProduct}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  backgroundColor: theme.colors.primary,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '600' }}>Thêm sản phẩm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }, [quickAddModalVisible, quickAddData, theme.colors]);
+
   // Process checkout and reset current order
   const handleCheckout = () => {
     if (!activeOrderId || cart.length === 0) return;
@@ -2205,12 +2481,20 @@ export function Cashier() {
           <View style={styles.portraitHeader}>
             <View style={styles.headerRow}>
               <Text style={[styles.title, { color: theme.colors.text }]}>Bán hàng POS</Text>
-              <TouchableOpacity
-                style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
-                onPress={() => updateViewMode(viewMode === 'split' ? 'fullscreen' : 'split')}
-              >
-                <Icon name={viewMode === 'split' ? 'open-in-full' : 'close-fullscreen'} size={20} color="#fff" />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
+                  onPress={() => setQuickAddModalVisible(true)}
+                >
+                  <Icon name="add" size={20} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
+                  onPress={() => updateViewMode(viewMode === 'split' ? 'fullscreen' : 'split')}
+                >
+                  <Icon name={viewMode === 'split' ? 'open-in-full' : 'close-fullscreen'} size={20} color="#fff" />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
@@ -2367,6 +2651,9 @@ export function Cashier() {
 
         {/* Variation Modal */}
         {renderVariationModal()}
+
+        {/* Quick Add Product Modal */}
+        {renderQuickAddModal()}
       </SafeAreaView>
     );
   }
@@ -2422,7 +2709,7 @@ export function Cashier() {
             <View style={styles.headerActions}>
               <TouchableOpacity
                 style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
-                onPress={() => {}}
+                onPress={() => setQuickAddModalVisible(true)}
               >
                 <Icon name="add" size={20} color="#fff" />
               </TouchableOpacity>
@@ -2592,6 +2879,9 @@ export function Cashier() {
 
       {/* Variation Modal */}
       {renderVariationModal()}
+
+      {/* Quick Add Product Modal */}
+      {renderQuickAddModal()}
     </ViewLandscape>
   );
 }
