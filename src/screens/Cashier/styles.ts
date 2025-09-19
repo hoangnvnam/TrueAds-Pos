@@ -72,10 +72,11 @@ export function useCashierStyles() {
 
     // Common Styles
     header: {
-      marginBottom: 20,
+      marginBottom: 16,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
+      gap: 12,
     },
     title: {
       fontSize: 28,
@@ -87,14 +88,14 @@ export function useCashierStyles() {
       marginBottom: 12,
     },
     searchInput: {
-      height: 46,
       borderWidth: 1,
       borderRadius: 12,
       paddingHorizontal: 16,
-      marginBottom: 16,
       fontSize: 16,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.background,
+      flex: 1,
+      height: 46,
     },
     categoryContainer: {
       paddingTop: 4,
@@ -697,6 +698,7 @@ export function useCashierStyles() {
     headerActions: {
       flexDirection: 'row',
       alignItems: 'center',
+      gap: 5,
     },
     viewModeToggle: {
       width: 40,

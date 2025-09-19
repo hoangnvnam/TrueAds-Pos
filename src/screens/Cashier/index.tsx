@@ -1,5 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, FlatList, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  FlatList,
+  Modal,
+  Platform,
+  ScrollView,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import BottomSheetModal from '~/components/BottomSheetModal';
 import { Icon } from '~/components/Icon';
 import { Image } from '~/components/Image';
@@ -221,10 +232,10 @@ export function Cashier() {
       staleTime: 1000 * 60 * 60 * 24,
     },
   });
-  const { data: userCashier, refresh: refreshUserCashier } = useFetchData({
-    queryKey: ['userCashierData'],
+  const { data: customers, refresh: refreshCustomer } = useFetchData({
+    queryKey: ['customersData'],
     url: '/get',
-    action: 'get_users_cashier_api',
+    action: 'get_all_customers_api',
     options: {
       refetchOnWindowFocus: true,
       refetchOnMount: true,
@@ -233,8 +244,6 @@ export function Cashier() {
       staleTime: 1000 * 60 * 60 * 24,
     },
   });
-  // refreshUserCashier();
-  console.log(JSON.stringify(userCashier, null, 2));
 
   const processedCategories: ProcessedCategory[] = React.useMemo(() => {
     if (!categories?.data) return [{ id: 'all', name: 'Tất cả' }];
@@ -1934,7 +1943,7 @@ export function Cashier() {
 
   const renderProductItem = ({ item, detail = false }: { item: Product; detail?: boolean }) => (
     <TouchableOpacity style={[styles.productCard]} onPress={() => addToCart(item)}>
-      <Image source={item.img_url || ''} />
+      <Image source={item.img_url || ''} width={100} />
       <Text style={[styles.productName, { color: theme.colors.text }]}>{item.name}</Text>
       <Text style={[styles.productPrice, { color: theme.colors.primary }]}>{formatCurrency(item.price)}</Text>
       <Text style={[styles.productStock, { color: theme.colors.text }]}>
@@ -2250,10 +2259,6 @@ export function Cashier() {
 
           <View style={styles.productsSection}>
             <View style={styles.productSectionHeader}>
-              <View style={styles.productHeaderLeft}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Sản phẩm</Text>
-                <Text style={styles.productCount}>{filteredProducts?.length || 0} sản phẩm</Text>
-              </View>
               <View style={styles.productHeaderRight}>
                 <TouchableOpacity
                   style={[styles.viewToggleButton, { backgroundColor: theme.colors.border }]}
@@ -2377,8 +2382,10 @@ export function Cashier() {
     );
   }
 
+  const ViewLandscape = Platform.OS === 'ios' ? View : SafeAreaView;
+
   return (
-    <SafeAreaView style={[styles.container]}>
+    <ViewLandscape style={[styles.container]}>
       {/* Floating Cart Button for fullscreen mode */}
       {viewMode === 'fullscreen' && (
         <>
@@ -2404,11 +2411,27 @@ export function Cashier() {
       <View style={styles.mainContent}>
         <View style={[styles.leftPanel, { flex: viewMode === 'fullscreen' ? 1 : 2 }]}>
           <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>Sản phẩm</Text>
+            {/* Search Bar */}
+            <TextInput
+              style={[styles.searchInput]}
+              placeholder="Tìm kiếm sản phẩm..."
+              placeholderTextColor={theme.colors.text}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
             <View style={styles.headerActions}>
-              <Text style={[{ color: theme.colors.text, fontSize: 16, marginRight: 12 }]}>
-                {filteredProducts?.length || 0} sản phẩm
-              </Text>
+              <TouchableOpacity
+                style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
+                onPress={() => {}}
+              >
+                <Icon name="add" size={20} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
+                onPress={() => {}}
+              >
+                <Icon name="barcode-scan" type="material-community" size={20} color="#fff" />
+              </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
                 onPress={() => updateViewMode(viewMode === 'split' ? 'fullscreen' : 'split')}
@@ -2417,15 +2440,6 @@ export function Cashier() {
               </TouchableOpacity>
             </View>
           </View>
-
-          {/* Search Bar */}
-          <TextInput
-            style={[styles.searchInput]}
-            placeholder="Tìm kiếm sản phẩm..."
-            placeholderTextColor={theme.colors.text}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
 
           {/* Category Filter */}
           <ScrollView
@@ -2483,7 +2497,7 @@ export function Cashier() {
             data={filteredProducts}
             renderItem={productViewMode === 'grid' ? renderProductItem : renderProductItemList}
             keyExtractor={(item) => item.id}
-            numColumns={productViewMode === 'grid' ? 2 : 1}
+            numColumns={productViewMode === 'grid' ? 3 : 1}
             key={productViewMode}
             contentContainerStyle={[
               productViewMode === 'grid' ? styles.productsGrid : styles.productsList,
@@ -2578,6 +2592,6 @@ export function Cashier() {
 
       {/* Variation Modal */}
       {renderVariationModal()}
-    </SafeAreaView>
+    </ViewLandscape>
   );
 }

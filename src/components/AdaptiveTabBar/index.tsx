@@ -104,9 +104,4 @@ const styles = StyleSheet.create({
     height: 18,
     marginRight: 10,
   },
-  sideTabText: {
-    fontSize: 12,
-    fontWeight: '500',
-    flex: 1,
-  },
 });

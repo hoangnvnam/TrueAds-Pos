@@ -73,7 +73,7 @@ export const privateRoutes: RouteConfig[] = [
   {
     name: 'POSInventory',
     component: POSInventory,
-    layout: LayoutSidebar,
+    layout: GradientBackground,
     options: {
       headerShown: false,
     },
@@ -82,7 +82,7 @@ export const privateRoutes: RouteConfig[] = [
   {
     name: 'POSReports',
     component: POSReports,
-    layout: LayoutSidebar,
+    layout: GradientBackground,
     options: {
       headerShown: false,
     },
@@ -91,7 +91,7 @@ export const privateRoutes: RouteConfig[] = [
   {
     name: 'POSSettings',
     component: POSSettings,
-    layout: LayoutSidebar,
+    layout: GradientBackground,
     options: {
       headerShown: false,
     },
