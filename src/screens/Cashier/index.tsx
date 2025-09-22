@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Modal,
@@ -9,6 +10,7 @@ import {
   Switch,
   Text,
   TextInput,
+  ToastAndroid,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -37,6 +39,8 @@ import { formatCurrency } from '~/utils/format';
 import { useCashierStyles } from './styles';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DIMENSIONS } from '~/constants/dimensions';
+import { useAudioPlayer } from 'expo-audio';
+import { axiosChild } from '~/configs/axios';
 
 // Global storage for orders to persist across re-mounts
 let globalOrdersStorage: Order[] = [];
@@ -48,6 +52,7 @@ export function Cashier() {
   const { styles } = useCashierStyles();
   const { settings, isLoaded, updateProductViewMode, updateViewMode, updateAutoPrint } = useCashierSettings();
   const { isLandscape } = useOrientation();
+  const successSoundPlayer = useAudioPlayer(require('~/assets/sound/beep.mp3'));
 
   // Multi-order state - Initialize from global storage
   const [orders, setOrders] = useState<Order[]>(() => globalOrdersStorage);
@@ -80,6 +85,7 @@ export function Cashier() {
 
   // Quick add product modal state
   const [quickAddModalVisible, setQuickAddModalVisible] = useState(false);
+  const [quickAddLoading, setQuickAddLoading] = useState(false);
   const [quickAddData, setQuickAddData] = useState({
     name: '',
     sku: '',
@@ -93,6 +99,7 @@ export function Cashier() {
   const [barcodeScannerVisible, setBarcodeScannerVisible] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [scanningForSKU, setScanningForSKU] = useState(false);
 
   // Refresh control state
   const [refreshing, setRefreshing] = useState(false);
@@ -126,12 +133,23 @@ export function Cashier() {
   const updateOrderCustomer = (customer: any) => {
     if (!activeOrderId) return;
 
+    // If customer is null, set default guest customer for the order but keep selectedCustomer as null for UI
+    const orderCustomer = customer || {
+      ID: 'guest',
+      display_name: 'Khách vãng lai',
+      user_email: 'guest@gmail.com',
+      phone: '',
+      user_login: 'guest',
+      total_order: 0,
+      total_spent: 0,
+    };
+
     setOrders((prevOrders) =>
       prevOrders.map((order) => {
         if (order.id === activeOrderId) {
           return {
             ...order,
-            customer: customer,
+            customer: orderCustomer,
             updatedAt: new Date(),
           };
         }
@@ -142,7 +160,12 @@ export function Cashier() {
 
   // Sync selected customer with current order
   React.useEffect(() => {
-    setSelectedCustomer(currentCustomer);
+    // If current customer is guest, set selectedCustomer to null for UI
+    if (currentCustomer?.user_email === 'guest@gmail.com') {
+      setSelectedCustomer(null);
+    } else {
+      setSelectedCustomer(currentCustomer);
+    }
   }, [currentCustomer, activeOrderId]);
 
   // Sync local state with global storage
@@ -183,7 +206,15 @@ export function Cashier() {
       items: [],
       orderDiscount: null,
       orderPromotion: null,
-      customer: null,
+      customer: {
+        ID: 'guest',
+        display_name: 'Khách vãng lai',
+        user_email: 'guest@gmail.com',
+        phone: '',
+        user_login: 'guest',
+        total_order: 0,
+        total_spent: 0,
+      },
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -1951,7 +1982,7 @@ export function Cashier() {
   };
 
   // Handle quick add product
-  const handleQuickAddProduct = () => {
+  const handleQuickAddProduct = async () => {
     // Validate required fields
     if (!quickAddData.name.trim()) {
       Alert.alert('Lỗi', 'Vui lòng nhập tên sản phẩm');
@@ -1986,67 +2017,114 @@ export function Cashier() {
       return;
     }
 
-    // Create temporary product object
-    const newProduct: Product = {
-      id: `temp_${Date.now()}`,
+    // Build data object for API
+    let dataBuild: any = {
+      cashier: true,
       name: quickAddData.name.trim(),
-      price: salePrice || regularPrice,
-      stock_quantity: stockQuantity || 999,
-      stock_status: quickAddData.manageStock ? (stockQuantity! > 0 ? 'instock' : 'outofstock') : 'instock',
-      img_url: '',
-      images: [],
       type: 'simple',
-      categories: [],
-      attributes: [],
-      variations: [],
+      regular_price: regularPrice.toString(),
+      sku: quickAddData.sku.trim() || undefined,
+      sale_price: salePrice ? salePrice.toString() : undefined,
+      status: 'private',
+      stock_status: 'instock',
     };
 
-    // Add to cart
-    addToCart(newProduct);
+    if (quickAddData.manageStock) {
+      dataBuild.manage_stock = true;
+      dataBuild.stock_quantity = stockQuantity || 0;
+    }
 
-    // Show success message
-    toastSuccess(`Đã thêm "${newProduct.name}" vào giỏ hàng`);
-
-    // Close modal and reset form
-    setQuickAddModalVisible(false);
-    resetQuickAddForm();
+    setQuickAddLoading(true);
+    try {
+      const { data: res } = await (await axiosChild({ action: 'create_product_data_api' })).post('/post', dataBuild);
+      await refreshProducts();
+      toastSuccess(`Đã thêm "${res.data?.name}" vào giỏ hàng`);
+      setQuickAddModalVisible(false);
+      resetQuickAddForm();
+    } catch (error) {
+      Alert.alert('Lỗi', 'Có lỗi xảy ra khi tạo sản phẩm. Vui lòng thử lại.');
+    } finally {
+      setQuickAddLoading(false);
+    }
   };
 
   const playSuccessSound = async () => {
     try {
-      console.log('Barcode scanned successfully');
+      successSoundPlayer.play();
     } catch (error) {
       console.log('Error playing sound:', error);
     }
+    successSoundPlayer.seekTo(0);
   };
 
   const handleBarCodeScanned = async ({ type, data }: { type: string; data: string }) => {
     if (scanned) return;
+
     setScanned(true);
-    await playSuccessSound();
 
-    const product = dataProducts?.data?.find(
-      (p: any) => p.sku === data || p.id === data || p.name.toLowerCase().includes(data.toLowerCase()),
-    );
-
-    if (product) {
-      addToCart(product);
-      toastSuccess(`Đã thêm "${product.name}" vào giỏ hàng`);
-    } else {
-      setQuickAddData((prev) => ({
-        ...prev,
-        sku: data,
-        name: `Sản phẩm ${data}`,
-      }));
-      setBarcodeScannerVisible(false);
-      setQuickAddModalVisible(true);
-      toastInfo(`Không tìm thấy sản phẩm với mã "${data}". Mở form thêm nhanh.`);
+    // If scanning for SKU, just set the SKU value and close scanner
+    if (scanningForSKU) {
+      setQuickAddData({ ...quickAddData, sku: data });
+      ToastAndroid.show(`Đã quét mã SKU: ${data}`, ToastAndroid.SHORT);
+      closeBarcodeScanner();
+      return;
     }
 
-    // Reset scanner after 1 second
+    // Original product scanning logic
+    if (Array.isArray(dataProducts?.data) && dataProducts.data.length > 0) {
+      // Phân loại sản phẩm theo type
+      const typeVariable = dataProducts.data.filter((product: any) => product.type === 'variable');
+      const typeSimple = dataProducts.data.filter((product: any) => product.type === 'simple');
+
+      // Lấy tất cả variations từ các sản phẩm variable
+      const productVari = typeVariable.flatMap((product: any) =>
+        Array.isArray(product.variations) ? product.variations : [],
+      );
+
+      // Tìm sản phẩm simple có SKU trùng khớp
+      if (typeSimple.some((product: any) => product.sku === data)) {
+        const foundProduct = typeSimple.find((product: any) => product.sku === data);
+        addToCart(foundProduct);
+        await playSuccessSound();
+        ToastAndroid.show(`Đã thêm "${foundProduct.name}" vào giỏ hàng`, ToastAndroid.SHORT);
+      }
+      // Tìm variation có SKU trùng khớp
+      else if (productVari.some((variation: any) => variation.sku === data)) {
+        const foundVariation = productVari.find((variation: any) => variation.sku === data);
+        // Tìm sản phẩm cha của variation này
+        const parentProduct = typeVariable.find((product: any) =>
+          product.variations?.some((v: any) => v.id === foundVariation.id),
+        );
+
+        if (parentProduct && foundVariation) {
+          // Tạo selectedAttributes từ variation attributes
+          const selectedAttrs: Record<string, string> = {};
+          if (foundVariation.attributes) {
+            Object.entries(foundVariation.attributes).forEach(([key, value]) => {
+              // Tìm attribute term name từ global attributes
+              const globalAttr = attributes?.data?.find((a: any) => a.slug === key);
+              const term = globalAttr?.terms?.find((t: any) => t.slug === value);
+              selectedAttrs[key] = term?.name || value;
+            });
+          }
+
+          addSelectedVariantToCart(parentProduct, foundVariation.id, selectedAttrs);
+          await playSuccessSound();
+          ToastAndroid.show(`Đã thêm "${parentProduct.name}" vào giỏ hàng`, ToastAndroid.SHORT);
+        }
+      }
+      // Không tìm thấy sản phẩm
+      else {
+        ToastAndroid.show(`Không tìm thấy sản phẩm với mã: ${data}`, ToastAndroid.SHORT);
+      }
+    }
+
+    // Reset scanner after 2 seconds
     setTimeout(() => {
       setScanned(false);
-    }, 1000);
+    }, 2000);
+
+    return;
   };
 
   const toggleCamera = () => {
@@ -2069,10 +2147,25 @@ export function Cashier() {
     setScanned(false);
   };
 
+  const openBarcodeScannerForSKU = async () => {
+    if (!cameraPermission?.granted) {
+      const result = await requestCameraPermission();
+      if (!result.granted) {
+        Alert.alert('Lỗi', 'Cần quyền truy cập camera để quét mã vạch');
+        return;
+      }
+    }
+    setScanningForSKU(true);
+    setBarcodeScannerVisible(true);
+    setCameraEnabled(true);
+    setScanned(false);
+  };
+
   const closeBarcodeScanner = () => {
     setBarcodeScannerVisible(false);
     setCameraEnabled(false);
     setScanned(false);
+    setScanningForSKU(false);
   };
 
   // Handle pull to refresh
@@ -2093,11 +2186,15 @@ export function Cashier() {
   // Filter customers based on search query
   const filteredCustomers = React.useMemo(() => {
     if (!customers?.data) return [];
+
+    // Always exclude guest customers from the display list
+    const nonGuestCustomers = customers.data.filter((c: any) => c.user_email !== 'guest@gmail.com');
+
     if (!customerSearchQuery.trim()) {
-      return customers.data.slice(0, 20);
+      return nonGuestCustomers.slice(0, 20);
     }
 
-    return customers.data.filter(
+    return nonGuestCustomers.filter(
       (customer: any) =>
         customer.display_name?.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
         customer.user_email?.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
@@ -2384,7 +2481,9 @@ export function Cashier() {
                 marginBottom: 20,
               }}
             >
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Quét mã vạch sản phẩm</Text>
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                {scanningForSKU ? 'Quét mã SKU' : 'Quét mã vạch sản phẩm'}
+              </Text>
               <TouchableOpacity onPress={closeBarcodeScanner}>
                 <Icon name="close" size={24} color={theme.colors.text} />
               </TouchableOpacity>
@@ -2508,7 +2607,7 @@ export function Cashier() {
         </View>
       </Modal>
     );
-  }, [barcodeScannerVisible, cameraEnabled, scanned, cameraPermission, theme.colors]);
+  }, [barcodeScannerVisible, cameraEnabled, scanned, scanningForSKU, cameraPermission, theme.colors]);
 
   // Render Quick Add Product Modal
   const renderQuickAddModal = React.useCallback(() => {
@@ -2553,22 +2652,38 @@ export function Cashier() {
               {/* SKU */}
               <View style={{ marginBottom: 16 }}>
                 <Text style={{ color: theme.colors.text, marginBottom: 8, fontWeight: '500' }}>Mã SKU</Text>
-                <TextInput
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.colors.border,
-                    borderRadius: 12,
-                    paddingHorizontal: 16,
-                    paddingVertical: 12,
-                    fontSize: 16,
-                    color: theme.colors.text,
-                    backgroundColor: theme.colors.background,
-                  }}
-                  placeholder="Nhập mã SKU (tự động tạo nếu để trống)"
-                  placeholderTextColor={theme.colors.text + '60'}
-                  value={quickAddData.sku}
-                  onChangeText={(text) => setQuickAddData({ ...quickAddData, sku: text })}
-                />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: theme.colors.border,
+                      borderRadius: 12,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      fontSize: 16,
+                      color: theme.colors.text,
+                      backgroundColor: theme.colors.background,
+                    }}
+                    placeholder="Nhập mã SKU (tự động tạo nếu để trống)"
+                    placeholderTextColor={theme.colors.text + '60'}
+                    value={quickAddData.sku}
+                    onChangeText={(text) => setQuickAddData({ ...quickAddData, sku: text })}
+                  />
+                  <TouchableOpacity
+                    onPress={openBarcodeScannerForSKU}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 12,
+                      borderRadius: 12,
+                      backgroundColor: theme.colors.primary,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Icon name="qr-code-scanner" size={20} color="#fff" />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* Regular Price */}
@@ -2684,22 +2799,29 @@ export function Cashier() {
 
               <TouchableOpacity
                 onPress={handleQuickAddProduct}
+                disabled={quickAddLoading}
                 style={{
                   flex: 1,
                   paddingVertical: 12,
                   borderRadius: 12,
-                  backgroundColor: theme.colors.primary,
+                  backgroundColor: quickAddLoading ? theme.colors.border : theme.colors.primary,
                   alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  opacity: quickAddLoading ? 0.7 : 1,
                 }}
               >
-                <Text style={{ color: '#fff', fontWeight: '600' }}>Thêm sản phẩm</Text>
+                {quickAddLoading && <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />}
+                <Text style={{ color: '#fff', fontWeight: '600' }}>
+                  {quickAddLoading ? 'Đang thêm...' : 'Thêm sản phẩm'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
     );
-  }, [quickAddModalVisible, quickAddData, theme.colors]);
+  }, [quickAddModalVisible, quickAddData, quickAddLoading, theme.colors]);
 
   // Process checkout and reset current order
   const handleCheckout = () => {
@@ -2764,7 +2886,15 @@ export function Cashier() {
           items: [],
           orderDiscount: null,
           orderPromotion: null,
-          customer: null,
+          customer: {
+            ID: 'guest',
+            display_name: 'Khách vãng lai',
+            user_email: 'guest@gmail.com',
+            phone: '',
+            user_login: 'guest',
+            total_order: 0,
+            total_spent: 0,
+          },
           updatedAt: new Date(),
         };
       }),
@@ -2772,6 +2902,7 @@ export function Cashier() {
 
     setQuantityInput({});
     setFooterCollapsed(false);
+    setSelectedCustomer(null); // Reset UI to show "Chọn khách hàng..."
   };
 
   const renderProductItem = React.useCallback(
