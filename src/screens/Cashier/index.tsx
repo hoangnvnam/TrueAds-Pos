@@ -4,6 +4,7 @@ import {
   FlatList,
   Modal,
   Platform,
+  RefreshControl,
   ScrollView,
   Switch,
   Text,
@@ -11,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import BottomSheetModal from '~/components/BottomSheetModal';
 import { Icon } from '~/components/Icon';
 import { Image } from '~/components/Image';
@@ -34,6 +36,7 @@ import { toastInfo, toastSuccess, toastWarning } from '~/hooks/useToast';
 import { formatCurrency } from '~/utils/format';
 import { useCashierStyles } from './styles';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { DIMENSIONS } from '~/constants/dimensions';
 
 // Global storage for orders to persist across re-mounts
 let globalOrdersStorage: Order[] = [];
@@ -86,6 +89,22 @@ export function Cashier() {
     stockQuantity: '',
   });
 
+  // Barcode scanner modal state
+  const [barcodeScannerVisible, setBarcodeScannerVisible] = useState(false);
+  const [scanned, setScanned] = useState(false);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
+
+  // Refresh control state
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Customer selection state
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const [customerDropdownVisible, setCustomerDropdownVisible] = useState(false);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+
+  // Camera permissions
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+
   // Helper function to get current active order
   const getCurrentOrder = (): Order | null => {
     return orders.find((order) => order.id === activeOrderId) || null;
@@ -99,6 +118,32 @@ export function Cashier() {
 
   // Helper function to get current order promotion
   const orderPromotion = getCurrentOrder()?.orderPromotion || null;
+
+  // Helper function to get current order customer
+  const currentCustomer = getCurrentOrder()?.customer || null;
+
+  // Update customer for current order
+  const updateOrderCustomer = (customer: any) => {
+    if (!activeOrderId) return;
+
+    setOrders((prevOrders) =>
+      prevOrders.map((order) => {
+        if (order.id === activeOrderId) {
+          return {
+            ...order,
+            customer: customer,
+            updatedAt: new Date(),
+          };
+        }
+        return order;
+      }),
+    );
+  };
+
+  // Sync selected customer with current order
+  React.useEffect(() => {
+    setSelectedCustomer(currentCustomer);
+  }, [currentCustomer, activeOrderId]);
 
   // Sync local state with global storage
   useEffect(() => {
@@ -138,6 +183,7 @@ export function Cashier() {
       items: [],
       orderDiscount: null,
       orderPromotion: null,
+      customer: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -255,7 +301,6 @@ export function Cashier() {
       staleTime: 1000 * 60 * 60 * 24,
     },
   });
-
   const processedCategories: ProcessedCategory[] = React.useMemo(() => {
     if (!categories?.data) return [{ id: 'all', name: 'Tất cả' }];
 
@@ -1967,6 +2012,504 @@ export function Cashier() {
     resetQuickAddForm();
   };
 
+  const playSuccessSound = async () => {
+    try {
+      console.log('Barcode scanned successfully');
+    } catch (error) {
+      console.log('Error playing sound:', error);
+    }
+  };
+
+  const handleBarCodeScanned = async ({ type, data }: { type: string; data: string }) => {
+    if (scanned) return;
+    setScanned(true);
+    await playSuccessSound();
+
+    const product = dataProducts?.data?.find(
+      (p: any) => p.sku === data || p.id === data || p.name.toLowerCase().includes(data.toLowerCase()),
+    );
+
+    if (product) {
+      addToCart(product);
+      toastSuccess(`Đã thêm "${product.name}" vào giỏ hàng`);
+    } else {
+      setQuickAddData((prev) => ({
+        ...prev,
+        sku: data,
+        name: `Sản phẩm ${data}`,
+      }));
+      setBarcodeScannerVisible(false);
+      setQuickAddModalVisible(true);
+      toastInfo(`Không tìm thấy sản phẩm với mã "${data}". Mở form thêm nhanh.`);
+    }
+
+    // Reset scanner after 1 second
+    setTimeout(() => {
+      setScanned(false);
+    }, 1000);
+  };
+
+  const toggleCamera = () => {
+    setCameraEnabled(!cameraEnabled);
+    if (scanned) {
+      setScanned(false);
+    }
+  };
+
+  const openBarcodeScanner = async () => {
+    if (!cameraPermission?.granted) {
+      const result = await requestCameraPermission();
+      if (!result.granted) {
+        Alert.alert('Lỗi', 'Cần quyền truy cập camera để quét mã vạch');
+        return;
+      }
+    }
+    setBarcodeScannerVisible(true);
+    setCameraEnabled(true);
+    setScanned(false);
+  };
+
+  const closeBarcodeScanner = () => {
+    setBarcodeScannerVisible(false);
+    setCameraEnabled(false);
+    setScanned(false);
+  };
+
+  // Handle pull to refresh
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Refresh all data concurrently
+      await Promise.all([refreshProducts(), refreshCategories(), refreshAttributes(), refreshCustomer()]);
+      toastSuccess('Đã cập nhật dữ liệu');
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      toastWarning('Có lỗi khi cập nhật dữ liệu');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshProducts, refreshCategories, refreshAttributes, refreshCustomer]);
+
+  // Filter customers based on search query
+  const filteredCustomers = React.useMemo(() => {
+    if (!customers?.data) return [];
+    if (!customerSearchQuery.trim()) {
+      return customers.data.slice(0, 20);
+    }
+
+    return customers.data.filter(
+      (customer: any) =>
+        customer.display_name?.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
+        customer.user_email?.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
+        customer.phone?.includes(customerSearchQuery) ||
+        customer.user_login?.toLowerCase().includes(customerSearchQuery.toLowerCase()),
+    );
+  }, [customers?.data, customerSearchQuery]);
+
+  // Render Customer Select Component
+  const renderCustomerSelect = React.useCallback(() => {
+    return (
+      <View style={{ marginBottom: 16 }}>
+        <Text style={[{ color: theme.colors.text, fontSize: 14, fontWeight: '500', marginBottom: 8 }]}>Khách hàng</Text>
+
+        <TouchableOpacity
+          style={{
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            borderRadius: 8,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            backgroundColor: theme.colors.cardBackground,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+          onPress={() => setCustomerDropdownVisible(true)}
+        >
+          <View style={{ flex: 1 }}>
+            {selectedCustomer ? (
+              <View>
+                <Text style={[{ color: theme.colors.text, fontSize: 14, fontWeight: '500' }]}>
+                  {selectedCustomer.display_name}
+                </Text>
+                {selectedCustomer.user_email && (
+                  <Text style={[{ color: theme.colors.text, fontSize: 12, opacity: 0.7 }]}>
+                    {selectedCustomer.user_email}
+                  </Text>
+                )}
+                {selectedCustomer.phone && (
+                  <Text style={[{ color: theme.colors.text, fontSize: 12, opacity: 0.7 }]}>
+                    📞 {selectedCustomer.phone}
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <Text style={[{ color: theme.colors.text, opacity: 0.5 }]}>Chọn khách hàng...</Text>
+            )}
+          </View>
+
+          <Icon name="keyboard-arrow-down" size={20} color={theme.colors.text} />
+        </TouchableOpacity>
+
+        {/* Customer Dropdown Modal */}
+        <Modal
+          visible={customerDropdownVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => {
+            setCustomerDropdownVisible(false);
+            setCustomerSearchQuery('');
+          }}
+        >
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+            activeOpacity={1}
+            onPress={() => {
+              setCustomerDropdownVisible(false);
+              setCustomerSearchQuery('');
+            }}
+          >
+            <TouchableOpacity
+              style={{
+                width: '90%',
+                maxWidth: 400,
+                maxHeight: '80%',
+                backgroundColor: theme.colors.background,
+                borderRadius: 12,
+                padding: 20,
+              }}
+              activeOpacity={1}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 16,
+                }}
+              >
+                <Text style={[{ color: theme.colors.text, fontSize: 18, fontWeight: '600' }]}>Chọn khách hàng</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setCustomerDropdownVisible(false);
+                    setCustomerSearchQuery('');
+                  }}
+                >
+                  <Icon name="close" size={24} color={theme.colors.text} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Search Input */}
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  fontSize: 14,
+                  color: theme.colors.text,
+                  backgroundColor: theme.colors.cardBackground,
+                  marginBottom: 16,
+                }}
+                placeholder="Tìm kiếm theo tên, email hoặc số điện thoại..."
+                placeholderTextColor={theme.colors.text + '60'}
+                value={customerSearchQuery}
+                onChangeText={setCustomerSearchQuery}
+                autoFocus
+              />
+
+              {/* Clear Selection Option */}
+              <TouchableOpacity
+                style={{
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.colors.border,
+                  backgroundColor: selectedCustomer === null ? theme.colors.primary + '20' : 'transparent',
+                }}
+                onPress={() => {
+                  setSelectedCustomer(null);
+                  updateOrderCustomer(null);
+                  setCustomerDropdownVisible(false);
+                  setCustomerSearchQuery('');
+                }}
+              >
+                <Text
+                  style={[
+                    {
+                      color: selectedCustomer === null ? theme.colors.primary : theme.colors.text,
+                      fontSize: 14,
+                      fontStyle: 'italic',
+                    },
+                  ]}
+                >
+                  Khách vãng lai (không chọn khách hàng)
+                </Text>
+              </TouchableOpacity>
+
+              {/* Customer List */}
+              <ScrollView style={{ maxHeight: DIMENSIONS.SCREEN_HEIGHT * 0.5 }} showsVerticalScrollIndicator={false}>
+                {filteredCustomers.length > 0 ? (
+                  filteredCustomers.map((customer: any, index: number) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={{
+                        paddingVertical: 12,
+                        paddingHorizontal: 16,
+                        borderBottomWidth: 1,
+                        borderBottomColor: theme.colors.border,
+                        backgroundColor:
+                          selectedCustomer?.ID === customer.ID ? theme.colors.primary + '20' : 'transparent',
+                      }}
+                      onPress={() => {
+                        setSelectedCustomer(customer);
+                        updateOrderCustomer(customer);
+                        setCustomerDropdownVisible(false);
+                        setCustomerSearchQuery('');
+                      }}
+                    >
+                      <View style={{ height: 50, flexDirection: 'column' }}>
+                        <Text
+                          style={[
+                            {
+                              color: selectedCustomer?.ID === customer.ID ? theme.colors.primary : theme.colors.text,
+                              fontSize: 14,
+                              fontWeight: '500',
+                            },
+                          ]}
+                        >
+                          {customer.display_name}
+                        </Text>
+
+                        {customer.user_email && (
+                          <Text
+                            style={[
+                              {
+                                color: theme.colors.text,
+                                fontSize: 12,
+                                opacity: 0.7,
+                                marginTop: 2,
+                              },
+                            ]}
+                          >
+                            📧 {customer.user_email}
+                          </Text>
+                        )}
+
+                        {customer.phone && (
+                          <Text
+                            style={[
+                              {
+                                color: theme.colors.text,
+                                fontSize: 12,
+                                opacity: 0.7,
+                                marginTop: 2,
+                              },
+                            ]}
+                          >
+                            📞 {customer.phone}
+                          </Text>
+                        )}
+
+                        {/* Show additional info */}
+                        <View style={{ flexDirection: 'row', marginTop: 4, gap: 12 }}>
+                          <Text
+                            style={[
+                              {
+                                color: theme.colors.text,
+                                fontSize: 11,
+                                opacity: 0.6,
+                              },
+                            ]}
+                          >
+                            {customer.total_order} đơn
+                          </Text>
+                          <Text
+                            style={[
+                              {
+                                color: theme.colors.primary,
+                                fontSize: 11,
+                                fontWeight: '500',
+                              },
+                            ]}
+                          >
+                            {formatCurrency(customer.total_spent)}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <View style={{ padding: 20, alignItems: 'center' }}>
+                    <Text style={[{ color: theme.colors.text, opacity: 0.7 }]}>
+                      {customerSearchQuery ? 'Không tìm thấy khách hàng' : 'Đang tải...'}
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+      </View>
+    );
+  }, [theme.colors, selectedCustomer, customerDropdownVisible, customerSearchQuery, filteredCustomers]);
+
+  // Render Barcode Scanner Modal
+  const renderBarcodeScannerModal = React.useCallback(() => {
+    if (!cameraPermission) {
+      return null;
+    }
+
+    return (
+      <Modal
+        visible={barcodeScannerVisible}
+        transparent={true}
+        animationType="none"
+        onRequestClose={closeBarcodeScanner}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { maxHeight: '80%', minHeight: 500 }]}>
+            {/* Header */}
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 20,
+              }}
+            >
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Quét mã vạch sản phẩm</Text>
+              <TouchableOpacity onPress={closeBarcodeScanner}>
+                <Icon name="close" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Camera Container */}
+            <View
+              style={{
+                height: 300,
+                borderRadius: 12,
+                overflow: 'hidden',
+                backgroundColor: theme.colors.background,
+                marginBottom: 20,
+              }}
+            >
+              {cameraEnabled && cameraPermission.granted ? (
+                <>
+                  <CameraView
+                    style={{ flex: 1 }}
+                    onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+                    barcodeScannerSettings={{
+                      barcodeTypes: ['qr', 'code128', 'code39', 'ean13', 'ean8', 'upc_a', 'upc_e'],
+                    }}
+                  />
+                  {/* Scan Overlay */}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 200,
+                        height: 200,
+                        borderWidth: 2,
+                        borderColor: theme.colors.primary,
+                        borderRadius: 12,
+                        backgroundColor: 'transparent',
+                      }}
+                    />
+                  </View>
+                </>
+              ) : (
+                <View
+                  style={{
+                    flex: 1,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    backgroundColor: theme.colors.border,
+                  }}
+                >
+                  <Icon name="camera" size={48} color={theme.colors.text} />
+                  <Text style={{ color: theme.colors.text, fontSize: 14, marginTop: 12, textAlign: 'center' }}>
+                    {!cameraPermission.granted ? 'Cần quyền truy cập camera' : 'Camera đã tắt'}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Info Text */}
+            <Text
+              style={{
+                color: theme.colors.text,
+                fontSize: 14,
+                textAlign: 'center',
+                marginBottom: 20,
+                opacity: 0.7,
+              }}
+            >
+              Đưa mã vạch vào khung để quét
+            </Text>
+
+            {/* Controls */}
+            <View style={{ gap: 12 }}>
+              {!cameraPermission.granted ? (
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: theme.colors.primary,
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                  }}
+                  onPress={requestCameraPermission}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '600' }}>Cấp quyền camera</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: cameraEnabled ? '#dc3545' : theme.colors.primary,
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                  }}
+                  onPress={toggleCamera}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '600' }}>{cameraEnabled ? 'Tắt Camera' : 'Mở Camera'}</Text>
+                </TouchableOpacity>
+              )}
+
+              {scanned && (
+                <Text
+                  style={{
+                    color: '#28a745',
+                    fontSize: 14,
+                    textAlign: 'center',
+                    fontWeight: '500',
+                  }}
+                >
+                  Quét thành công! Đang xử lý...
+                </Text>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }, [barcodeScannerVisible, cameraEnabled, scanned, cameraPermission, theme.colors]);
+
   // Render Quick Add Product Modal
   const renderQuickAddModal = React.useCallback(() => {
     return (
@@ -2170,6 +2713,19 @@ export function Cashier() {
 
     let message = `Thanh toán thành công!\n\nTổng hóa đơn: ${formatCurrency(finalTotal)}`;
 
+    // Add customer info if available
+    const currentOrder = getCurrentOrder();
+    if (currentOrder?.customer) {
+      const customer = currentOrder.customer;
+      message += `\nKhách hàng: ${customer.display_name}`;
+      if (customer.user_email) {
+        message += `\nEmail: ${customer.user_email}`;
+      }
+      if (customer.phone) {
+        message += `\nSĐT: ${customer.phone}`;
+      }
+    }
+
     if (itemDiscountTotal > 0 || orderDiscountAmount > 0 || promotionAmount > 0) {
       message += `\nTổng gốc: ${formatCurrency(originalTotal)}`;
 
@@ -2208,6 +2764,7 @@ export function Cashier() {
           items: [],
           orderDiscount: null,
           orderPromotion: null,
+          customer: null,
           updatedAt: new Date(),
         };
       }),
@@ -2217,30 +2774,56 @@ export function Cashier() {
     setFooterCollapsed(false);
   };
 
-  const renderProductItem = ({ item, detail = false }: { item: Product; detail?: boolean }) => (
-    <TouchableOpacity style={[styles.productCard]} onPress={() => addToCart(item)}>
-      <Image source={item.img_url || ''} width={100} />
-      <Text style={[styles.productName, { color: theme.colors.text }]}>{item.name}</Text>
-      <Text style={[styles.productPrice, { color: theme.colors.primary }]}>{formatCurrency(item.price)}</Text>
-      <Text style={[styles.productStock, { color: theme.colors.text }]}>
-        Kho: {item.stock_quantity && item.stock_quantity !== 0 ? item.stock_quantity : item.stock_status}
-      </Text>
-    </TouchableOpacity>
+  const renderProductItem = React.useCallback(
+    ({ item, detail = false }: { item: Product; detail?: boolean }) => (
+      <TouchableOpacity style={[styles.productCard]} onPress={() => addToCart(item)}>
+        <Image source={item.img_url || ''} width={100} />
+        <Text style={[styles.productName, { color: theme.colors.text }]}>{item.name}</Text>
+        <Text style={[styles.productPrice, { color: theme.colors.primary }]}>{formatCurrency(item.price)}</Text>
+        <Text style={[styles.productStock, { color: theme.colors.text }]}>
+          Kho: {item.stock_quantity && item.stock_quantity !== 0 ? item.stock_quantity : item.stock_status}
+        </Text>
+      </TouchableOpacity>
+    ),
+    [
+      theme.colors.text,
+      theme.colors.primary,
+      addToCart,
+      formatCurrency,
+      styles.productCard,
+      styles.productName,
+      styles.productPrice,
+      styles.productStock,
+    ],
   );
 
-  const renderProductItemList = ({ item }: { item: Product }) => (
-    <TouchableOpacity style={[styles.productCardList]} onPress={() => addToCart(item)}>
-      <View style={styles.productListContent}>
-        <Image source={item.img_url || item.images[0]?.src || ''} style={{ marginRight: 10 }} />
-        <View style={styles.productListInfo}>
-          <Text style={[styles.productNameList, { color: theme.colors.text }]}>{item.name}</Text>
-          <Text style={[styles.productStockList, { color: theme.colors.text }]}>
-            Kho: {item.stock_quantity && item.stock_quantity !== 0 ? item.stock_quantity : item.stock_status}
-          </Text>
+  const renderProductItemList = React.useCallback(
+    ({ item }: { item: Product }) => (
+      <TouchableOpacity style={[styles.productCardList]} onPress={() => addToCart(item)}>
+        <View style={styles.productListContent}>
+          <Image source={item.img_url || item.images[0]?.src || ''} style={{ marginRight: 10 }} />
+          <View style={styles.productListInfo}>
+            <Text style={[styles.productNameList, { color: theme.colors.text }]}>{item.name}</Text>
+            <Text style={[styles.productStockList, { color: theme.colors.text }]}>
+              Kho: {item.stock_quantity && item.stock_quantity !== 0 ? item.stock_quantity : item.stock_status}
+            </Text>
+          </View>
+          <Text style={[styles.productPriceList, { color: theme.colors.primary }]}>{formatCurrency(item.price)}</Text>
         </View>
-        <Text style={[styles.productPriceList, { color: theme.colors.primary }]}>{formatCurrency(item.price)}</Text>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    ),
+    [
+      theme.colors.text,
+      theme.colors.primary,
+      addToCart,
+      formatCurrency,
+      styles.productCardList,
+      styles.productListContent,
+      styles.productListInfo,
+      styles.productNameList,
+      styles.productStockList,
+      styles.productPriceList,
+    ],
   );
 
   // Render Order Tabs component
@@ -2476,169 +3059,191 @@ export function Cashier() {
           </>
         )}
 
-        <ScrollView style={styles.portraitContainer} showsVerticalScrollIndicator={false}>
-          {/* Header */}
-          <View style={styles.portraitHeader}>
-            <View style={styles.headerRow}>
-              <Text style={[styles.title, { color: theme.colors.text }]}>Bán hàng POS</Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity
-                  style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
-                  onPress={() => setQuickAddModalVisible(true)}
-                >
-                  <Icon name="add" size={20} color="#fff" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
-                  onPress={() => updateViewMode(viewMode === 'split' ? 'fullscreen' : 'split')}
-                >
-                  <Icon name={viewMode === 'split' ? 'open-in-full' : 'close-fullscreen'} size={20} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.searchSection}>
-            <TextInput
-              style={[
-                styles.searchInput,
-                {
-                  backgroundColor: theme.colors.cardBackground,
-                  borderColor: theme.colors.border,
-                  color: theme.colors.text,
-                },
-              ]}
-              placeholder="Tìm kiếm sản phẩm..."
-              placeholderTextColor={theme.colors.text}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
+        <FlatList
+          data={filteredProducts}
+          renderItem={productViewMode === 'grid' ? renderProductItem : renderProductItemList}
+          keyExtractor={(item) => item.id}
+          numColumns={productViewMode === 'grid' ? 2 : 1}
+          key={productViewMode} // Force re-render when view mode changes
+          scrollEnabled={true}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          initialNumToRender={10}
+          contentContainerStyle={[
+            productViewMode === 'grid' ? styles.productsGrid : styles.productsList,
+            { paddingBottom: 20 },
+          ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.colors.primary]}
+              tintColor={theme.colors.primary}
             />
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryContainer}>
-            {processedCategories.map((category) => (
-              <TouchableOpacity
-                key={category.id}
-                style={[
-                  styles.categoryButton,
-                  {
-                    backgroundColor:
-                      selectedCategory === category.id ? theme.colors.primary : theme.colors.cardBackground,
-                  },
-                ]}
-                onPress={() => setSelectedCategory(category.id)}
-              >
-                <Text
-                  style={[
-                    styles.categoryText,
-                    { color: selectedCategory === category.id ? '#fff' : theme.colors.text },
-                  ]}
-                >
-                  {category.name}
-                  {category.count !== undefined && category.id !== 'all' ? ` (${category.count})` : ''}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <View style={styles.productsSection}>
-            <View style={styles.productSectionHeader}>
-              <View style={styles.productHeaderRight}>
-                <TouchableOpacity
-                  style={[styles.viewToggleButton, { backgroundColor: theme.colors.border }]}
-                  onPress={() => updateProductViewMode(productViewMode === 'grid' ? 'list' : 'grid')}
-                >
-                  <Icon
-                    name={productViewMode === 'grid' ? 'view-list' : 'view-module'}
-                    size={20}
-                    color={theme.colors.text}
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-            <FlatList
-              data={filteredProducts}
-              renderItem={productViewMode === 'grid' ? renderProductItem : renderProductItemList}
-              keyExtractor={(item) => item.id}
-              numColumns={productViewMode === 'grid' ? 2 : 1}
-              key={productViewMode} // Force re-render when view mode changes
-              scrollEnabled={false}
-              contentContainerStyle={[productViewMode === 'grid' ? styles.productsGrid : styles.productsList]}
-            />
-          </View>
-
-          {/* Always show order management, even when cart is empty */}
-          {viewMode === 'split' && (
-            <View style={[styles.portraitCartSection]}>
-              {/* Order Tabs */}
-              {renderOrderTabs()}
-
-              <View style={styles.cartHeader}>
-                <View style={styles.cartHeaderRow}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                    {getCurrentOrder()?.name || 'Giỏ hàng'}
-                  </Text>
-                  <View style={styles.cartItemsBadge}>
-                    <Text style={styles.cartItemsBadgeText}>{getTotalItems()}</Text>
+          }
+          ListHeaderComponent={
+            <View>
+              {/* Header */}
+              <View style={styles.portraitHeader}>
+                <View style={styles.headerRow}>
+                  <Text style={[styles.title, { color: theme.colors.text }]}>Bán hàng POS</Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
+                      onPress={() => setQuickAddModalVisible(true)}
+                    >
+                      <Icon name="add" size={20} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
+                      onPress={openBarcodeScanner}
+                    >
+                      <Icon name="barcode-scan" type="material-community" size={20} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
+                      onPress={() => updateViewMode(viewMode === 'split' ? 'fullscreen' : 'split')}
+                    >
+                      <Icon name={viewMode === 'split' ? 'open-in-full' : 'close-fullscreen'} size={20} color="#fff" />
+                    </TouchableOpacity>
                   </View>
                 </View>
               </View>
 
-              {cart.length === 0 ? (
-                <View style={styles.emptyCartContainer}>
-                  <Text style={styles.emptyCartText}>Giỏ hàng trống{'\n'}Vui lòng thêm sản phẩm</Text>
-                </View>
-              ) : (
-                <FlatList
-                  data={cart}
-                  renderItem={renderCartItem}
-                  keyExtractor={(item) => item.id}
-                  scrollEnabled={false}
-                  style={styles.portraitCartList}
+              <View style={styles.searchSection}>
+                <TextInput
+                  style={[
+                    styles.searchInput,
+                    {
+                      backgroundColor: theme.colors.cardBackground,
+                      borderColor: theme.colors.border,
+                      color: theme.colors.text,
+                    },
+                  ]}
+                  placeholder="Tìm kiếm sản phẩm..."
+                  placeholderTextColor={theme.colors.text}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
                 />
-              )}
+              </View>
 
-              <View style={[styles.portraitCheckout, { borderTopColor: theme.colors.border }]}>
-                {/* Collapsible footer toggle */}
-                {renderToggleFooterButton('Portrait')}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryContainer}>
+                {processedCategories.map((category) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    style={[
+                      styles.categoryButton,
+                      {
+                        backgroundColor:
+                          selectedCategory === category.id ? theme.colors.primary : theme.colors.cardBackground,
+                      },
+                    ]}
+                    onPress={() => setSelectedCategory(category.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryText,
+                        { color: selectedCategory === category.id ? '#fff' : theme.colors.text },
+                      ]}
+                    >
+                      {category.name}
+                      {category.count !== undefined && category.id !== 'all' ? ` (${category.count})` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
 
-                {/* Collapsible section - Order Discount, Promotion, Auto Print */}
-                {!footerCollapsed && (
-                  <>
-                    {/* Order Discount Row */}
-                    {renderOrderDiscountRow()}
-
-                    {/* Promotion Row */}
-                    {renderPromotionRow()}
-
-                    {/* Auto Print Toggle */}
-                    {renderAutoPrintToggle()}
-
-                    {/* Order details when expanded */}
-                    {renderOrderSummaryDetails()}
-                  </>
-                )}
-
-                {/* Total and Checkout Button - always visible */}
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>
-                    Khách phải trả:
-                  </Text>
-                  <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
-                    {formatCurrency(getFinalOrderTotal())}
-                  </Text>
+              <View style={styles.productSectionHeader}>
+                <View style={styles.productHeaderRight}>
+                  <TouchableOpacity
+                    style={[styles.viewToggleButton, { backgroundColor: theme.colors.border }]}
+                    onPress={() => updateProductViewMode(productViewMode === 'grid' ? 'list' : 'grid')}
+                  >
+                    <Icon
+                      name={productViewMode === 'grid' ? 'view-list' : 'view-module'}
+                      size={20}
+                      color={theme.colors.text}
+                    />
+                  </TouchableOpacity>
                 </View>
-
-                <TouchableOpacity
-                  style={[styles.checkoutButton, { backgroundColor: theme.colors.primary }]}
-                  onPress={handleCheckout}
-                >
-                  <Text style={styles.checkoutButtonText}>Thanh toán</Text>
-                </TouchableOpacity>
               </View>
             </View>
-          )}
-        </ScrollView>
+          }
+          ListFooterComponent={
+            viewMode === 'split' ? (
+              <View style={[styles.portraitCartSection]}>
+                {/* Order Tabs */}
+                {renderOrderTabs()}
+
+                <View style={styles.cartHeader}>
+                  <View style={styles.cartHeaderRow}>
+                    <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                      {getCurrentOrder()?.name || 'Giỏ hàng'}
+                    </Text>
+                    <View style={styles.cartItemsBadge}>
+                      <Text style={styles.cartItemsBadgeText}>{getTotalItems()}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Customer Select for Portrait */}
+                {renderCustomerSelect()}
+
+                {cart.length === 0 ? (
+                  <View style={styles.emptyCartContainer}>
+                    <Text style={styles.emptyCartText}>Giỏ hàng trống{'\n'}Vui lòng thêm sản phẩm</Text>
+                  </View>
+                ) : (
+                  <View>
+                    {cart.map((item) => (
+                      <View key={item.id}>{renderCartItem({ item })}</View>
+                    ))}
+                  </View>
+                )}
+
+                <View style={[styles.portraitCheckout, { borderTopColor: theme.colors.border }]}>
+                  {/* Collapsible footer toggle */}
+                  {renderToggleFooterButton('Portrait')}
+
+                  {/* Collapsible section - Order Discount, Promotion, Auto Print */}
+                  {!footerCollapsed && (
+                    <>
+                      {/* Order Discount Row */}
+                      {renderOrderDiscountRow()}
+
+                      {/* Promotion Row */}
+                      {renderPromotionRow()}
+
+                      {/* Auto Print Toggle */}
+                      {renderAutoPrintToggle()}
+
+                      {/* Order details when expanded */}
+                      {renderOrderSummaryDetails()}
+                    </>
+                  )}
+
+                  {/* Total and Checkout Button - always visible */}
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: theme.colors.text, fontWeight: 'bold' }]}>
+                      Khách phải trả:
+                    </Text>
+                    <Text style={[styles.summaryValue, { color: theme.colors.primary, fontWeight: 'bold' }]}>
+                      {formatCurrency(getFinalOrderTotal())}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.checkoutButton, { backgroundColor: theme.colors.primary }]}
+                    onPress={handleCheckout}
+                  >
+                    <Text style={styles.checkoutButtonText}>Thanh toán</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null
+          }
+        />
 
         {/* Discount Modal for Portrait */}
         {renderDiscountModal()}
@@ -2654,6 +3259,9 @@ export function Cashier() {
 
         {/* Quick Add Product Modal */}
         {renderQuickAddModal()}
+
+        {/* Barcode Scanner Modal */}
+        {renderBarcodeScannerModal()}
       </SafeAreaView>
     );
   }
@@ -2715,7 +3323,7 @@ export function Cashier() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.viewModeToggle, { backgroundColor: theme.colors.primary }]}
-                onPress={() => {}}
+                onPress={openBarcodeScanner}
               >
                 <Icon name="barcode-scan" type="material-community" size={20} color="#fff" />
               </TouchableOpacity>
@@ -2786,11 +3394,23 @@ export function Cashier() {
             keyExtractor={(item) => item.id}
             numColumns={productViewMode === 'grid' ? 3 : 1}
             key={productViewMode}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={15}
+            windowSize={5}
+            initialNumToRender={15}
             contentContainerStyle={[
               productViewMode === 'grid' ? styles.productsGrid : styles.productsList,
               { paddingBottom: 200 },
             ]}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[theme.colors.primary]}
+                tintColor={theme.colors.primary}
+              />
+            }
           />
         </View>
 
@@ -2799,7 +3419,6 @@ export function Cashier() {
           <View style={[styles.rightPanel]}>
             {/* Order Tabs */}
             {renderOrderTabs()}
-
             <View style={styles.header}>
               <Text style={[styles.title, { color: theme.colors.text }]}>{getCurrentOrder()?.name || 'Giỏ hàng'}</Text>
               <View style={styles.cartItemsBadgeLarge}>
@@ -2807,6 +3426,8 @@ export function Cashier() {
               </View>
             </View>
 
+            {/* Customer Select */}
+            {renderCustomerSelect()}
             {cart.length === 0 ? (
               <View style={styles.emptyCartContainer}>
                 <Text style={styles.emptyCartText}>Giỏ hàng trống{'\n'}Vui lòng thêm sản phẩm</Text>
@@ -2882,6 +3503,9 @@ export function Cashier() {
 
       {/* Quick Add Product Modal */}
       {renderQuickAddModal()}
+
+      {/* Barcode Scanner Modal */}
+      {renderBarcodeScannerModal()}
     </ViewLandscape>
   );
 }

@@ -112,6 +112,7 @@ export interface Order {
   items: OrderItem[];
   orderDiscount: OrderDiscount | null;
   orderPromotion: OrderPromotion | null;
+  customer: any | null;
   createdAt: Date;
   updatedAt: Date;
 }

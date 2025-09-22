@@ -30,9 +30,11 @@ export function useCashierStyles() {
     },
     rightPanel: {
       flex: 1,
-      paddingVertical: 16,
+      paddingVertical: 12,
       paddingHorizontal: 8,
       borderRadius: 12,
+      flexDirection: 'column',
+      justifyContent: 'space-between',
     },
 
     // Portrait Layout Styles
